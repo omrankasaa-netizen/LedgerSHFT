@@ -145,6 +145,15 @@ export class DocuParseInvoiceParsingService implements InvoiceParsingService {
     const body = (await response.json().catch(() => null)) as DocuParseExtractResponse | null;
     if (!body) throw new ApiError(502, `DocuParse returned a non-JSON response (${response.status})`);
     if (!body.success) {
+      // Plan-gated accounts get a cryptic provider message; make it actionable.
+      if (body.error?.code === "API_ACCESS_REQUIRES_PAID_PLAN") {
+        throw new ApiError(
+          403,
+          "DocuParse rejected the request: this account's plan has no API access. " +
+            "Open the DocuParse dashboard and switch the account to the Free plan (20 docs/month) " +
+            "or a paid plan, then create a new API key.",
+        );
+      }
       const status = response.status >= 400 && response.status < 600 ? response.status : 502;
       throw new ApiError(status, body.error?.message || `DocuParse error (${response.status})`);
     }
