@@ -6,7 +6,9 @@ export function formatMoney(amount, currency = "USD") {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   });
-  return currency === "LBP" ? `${formatted} LBP` : `$${formatted}`;
+  if (currency === "LBP") return `${formatted} LBP`;
+  if (currency === "USD") return `$${formatted}`;
+  return `${formatted} ${currency}`; // CNY, EUR, ...
 }
 
 export function formatNumber(value) {

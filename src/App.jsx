@@ -20,6 +20,8 @@ import Payments from '@/pages/Payments';
 import PaymentForm from '@/pages/PaymentForm';
 import Reports from '@/pages/Reports';
 import Settings from '@/pages/Settings';
+import PurchaseInvoices from '@/pages/PurchaseInvoices';
+import PurchaseInvoiceForm from '@/pages/PurchaseInvoiceForm';
 // Add page imports here
 
 const AuthenticatedApp = () => {
@@ -60,6 +62,9 @@ const AuthenticatedApp = () => {
         <Route path="/invoices/:id/edit" element={<InvoiceForm />} />
         <Route path="/payments" element={<Payments />} />
         <Route path="/payments/new" element={<PaymentForm />} />
+        <Route path="/imports/purchase-invoices" element={<PurchaseInvoices />} />
+        <Route path="/imports/purchase-invoices/new" element={<PurchaseInvoiceForm />} />
+        <Route path="/imports/purchase-invoices/:id/edit" element={<PurchaseInvoiceForm />} />
         <Route path="/reports" element={<Reports />} />
         <Route path="/settings" element={<Settings />} />
       </Route>
