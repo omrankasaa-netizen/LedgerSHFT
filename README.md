@@ -101,8 +101,10 @@ builds both halves (`npm run build:full`) and starts the backend
    `INVOICE_PARSER_PROVIDER=docuparse` + `DOCUPARSE_API_KEY`.
    Do **not** set `PORT` — Railway injects it. `CORS_ORIGIN` is not needed
    here because the frontend is same-origin.
-4. One-off setup (Railway shell): `npx prisma db push && npm run seed`
-   (run from the `backend` directory).
+4. One-off setup (Railway shell, from `/root/repo`): `npm run setup:db`.
+   This installs the backend deps and runs `prisma db push` + the seed.
+   (Use `db push`, not `db update`; and note `NODE_ENV=production` makes plain
+   `npm install` skip devDependencies — the scripts pass `--include=dev`.)
 5. Your Railway domain (e.g. `https://<app>.up.railway.app`) now serves both
    the app UI (`/`) and the API (`/api/health`).
 
