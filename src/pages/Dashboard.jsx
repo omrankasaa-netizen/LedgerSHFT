@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/api/entities";
 import { PageHeader, StatCard, Loading, Badge } from "@/components/ui/common";
 import { formatMoney, customerOutstanding, isThisMonth, monthLabel } from "@/lib/finance";
 import { Plus, Wallet, FileText, Users, ArrowRight, TrendingUp } from "lucide-react";
@@ -21,9 +21,9 @@ export default function Dashboard() {
     (async () => {
       try {
         const [inv, pays, custs] = await Promise.all([
-          base44.entities.Invoice.list(),
-          base44.entities.Payment.list(),
-          base44.entities.Customer.list(),
+          db.entities.Invoice.list(),
+          db.entities.Payment.list(),
+          db.entities.Customer.list(),
         ]);
         setInvoices(inv);
         setPayments(pays);
