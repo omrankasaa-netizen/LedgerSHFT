@@ -12,7 +12,12 @@ router.use(authenticate);
 const paymentSchema = z.object({
   customerId: z.string().min(1, "Customer is required"),
   invoiceId: z.string().nullish(),
-  date: z.string().min(4, "Date is required"),
+  // Accept "YYYY-MM-DD" from the client, convert to a real Date for Prisma.
+  date: z
+    .string()
+    .min(4, "Date is required")
+    .refine((v) => !Number.isNaN(new Date(v).getTime()), "Invalid date")
+    .transform((v) => new Date(v)),
   currency: z.string().regex(/^[A-Za-z]{3}$/).transform((v) => v.toUpperCase()).default("USD"),
   amount: z.number().positive("Amount must be greater than 0"),
   method: z.enum(["cash", "bank_transfer", "cheque", "remittance", "other"]).default("cash"),
