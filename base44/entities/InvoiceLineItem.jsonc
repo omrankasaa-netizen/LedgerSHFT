@@ -1,0 +1,50 @@
+{
+  "name": "InvoiceLineItem",
+  "type": "object",
+  "properties": {
+    "invoice_id": {
+      "type": "string",
+      "relation": "Invoice",
+      "required": true,
+      "title": "Invoice"
+    },
+    "product_name": {
+      "type": "string",
+      "required": true,
+      "title": "Product Name"
+    },
+    "product_code": {
+      "type": "string",
+      "title": "Product Code"
+    },
+    "quantity": {
+      "type": "number",
+      "default": 1,
+      "title": "Quantity"
+    },
+    "unit_price": {
+      "type": "number",
+      "default": 0,
+      "title": "Unit Price"
+    },
+    "line_total": {
+      "type": "number",
+      "default": 0,
+      "title": "Line Total"
+    },
+    "unit_cost": {
+      "type": "number",
+      "default": 0,
+      "title": "Unit Cost"
+    },
+    "line_cost_total": {
+      "type": "number",
+      "default": 0,
+      "title": "Line Cost Total"
+    }
+  },
+  "required": [
+    "invoice_id",
+    "product_name"
+  ]
+}

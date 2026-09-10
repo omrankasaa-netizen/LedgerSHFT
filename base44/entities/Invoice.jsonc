@@ -1,0 +1,91 @@
+{
+  "name": "Invoice",
+  "type": "object",
+  "properties": {
+    "invoice_number": {
+      "type": "string",
+      "title": "Invoice Number"
+    },
+    "customer_id": {
+      "type": "string",
+      "relation": "Customer",
+      "required": true,
+      "title": "Customer"
+    },
+    "partner_id": {
+      "type": "string",
+      "relation": "Partner",
+      "title": "Partner"
+    },
+    "date": {
+      "type": "string",
+      "format": "date",
+      "required": true,
+      "title": "Date"
+    },
+    "currency": {
+      "type": "string",
+      "enum": [
+        "USD",
+        "LBP"
+      ],
+      "default": "USD",
+      "title": "Currency"
+    },
+    "subtotal_amount": {
+      "type": "number",
+      "default": 0,
+      "title": "Subtotal"
+    },
+    "discount_amount": {
+      "type": "number",
+      "default": 0,
+      "title": "Discount"
+    },
+    "tax_amount": {
+      "type": "number",
+      "default": 0,
+      "title": "Tax"
+    },
+    "total_amount": {
+      "type": "number",
+      "default": 0,
+      "title": "Total"
+    },
+    "total_cost_amount": {
+      "type": "number",
+      "default": 0,
+      "title": "Total Cost"
+    },
+    "gross_profit_amount": {
+      "type": "number",
+      "default": 0,
+      "title": "Gross Profit"
+    },
+    "partner_share_amount": {
+      "type": "number",
+      "default": 0,
+      "title": "Partner Share"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "Draft",
+        "Issued",
+        "Partially Paid",
+        "Paid",
+        "Overdue"
+      ],
+      "default": "Draft",
+      "title": "Status"
+    },
+    "notes": {
+      "type": "string",
+      "title": "Notes"
+    }
+  },
+  "required": [
+    "customer_id",
+    "date"
+  ]
+}
