@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/api/entities";
 import { PageHeader, Table, Loading, Badge } from "@/components/ui/common";
 import { formatMoney, statusColor, customerOutstanding } from "@/lib/finance";
 import { ArrowLeft, Pencil, Wallet } from "lucide-react";
@@ -22,9 +22,9 @@ export default function CustomerDetail() {
     setLoading(true);
     try {
       const [c, inv, pays] = await Promise.all([
-        base44.entities.Customer.get(id),
-        base44.entities.Invoice.list(),
-        base44.entities.Payment.list(),
+        db.entities.Customer.get(id),
+        db.entities.Invoice.list(),
+        db.entities.Payment.list(),
       ]);
       setCustomer(c);
       setInvoices(inv.filter((i) => i.customer_id === id));
