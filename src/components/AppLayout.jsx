@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Link, useLocation, Outlet } from "react-router-dom";
 import {
   LayoutDashboard, Users, Handshake, FileText, Wallet,
-  BarChart3, Settings, Menu, X, BookOpen,
+  BarChart3, Settings, Menu, X, BookOpen, Ship,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import LanguageToggle from "@/components/LanguageToggle";
@@ -13,6 +13,7 @@ const navItems = [
   { labelKey: "nav.partners", path: "/partners", icon: Handshake },
   { labelKey: "nav.invoices", path: "/invoices", icon: FileText },
   { labelKey: "nav.payments", path: "/payments", icon: Wallet },
+  { labelKey: "nav.importsCost", path: "/imports/purchase-invoices", icon: Ship },
   { labelKey: "nav.reports", path: "/reports", icon: BarChart3 },
   { labelKey: "nav.settings", path: "/settings", icon: Settings },
 ];
