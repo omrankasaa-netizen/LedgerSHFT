@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/api/entities";
 import { PageHeader, Table, Loading, Badge } from "@/components/ui/common";
 import { formatMoney, statusColor, invoiceOutstanding } from "@/lib/finance";
 import { ArrowLeft, Pencil, Wallet, Trash2 } from "lucide-react";
@@ -22,16 +22,15 @@ export default function InvoiceDetail() {
   const load = async () => {
     setLoading(true);
     try {
-      const inv = await base44.entities.Invoice.get(id);
+      const inv = await db.entities.Invoice.get(id);
       setInvoice(inv);
-      const [allLines, allPayments, customers, partners] = await Promise.all([
-        base44.entities.InvoiceLineItem.list(),
-        base44.entities.Payment.list(),
-        base44.entities.Customer.list(),
-        base44.entities.Partner.list(),
+      // Line items and payments come embedded with the invoice.
+      setLines(inv.line_items || []);
+      setPayments(inv.payments || []);
+      const [customers, partners] = await Promise.all([
+        db.entities.Customer.list(),
+        db.entities.Partner.list(),
       ]);
-      setLines(allLines.filter((l) => l.invoice_id === id));
-      setPayments(allPayments.filter((p) => p.invoice_id === id));
       setCustomer(customers.find((c) => c.id === inv.customer_id));
       setPartner(partners.find((p) => p.id === inv.partner_id));
     } finally {
@@ -48,7 +47,7 @@ export default function InvoiceDetail() {
   const outstanding = invoiceOutstanding(invoice, payments);
 
   const deletePayment = async (pid) => {
-    await base44.entities.Payment.delete(pid);
+    await db.entities.Payment.delete(pid);
     toast({ title: t("toast.paymentDeleted") });
     load();
   };
