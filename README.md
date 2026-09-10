@@ -51,7 +51,7 @@ LedgerShift is built for Lebanese wholesalers who issue invoices, sell on credit
 
 | Variable | Purpose |
 | --- | --- |
-| `VITE_API_URL` | base URL of the backend API |
+| `VITE_API_URL` | base URL of the backend API (leave unset when the backend serves the frontend) |
 
 ## Run locally
 
@@ -88,22 +88,33 @@ reconciliation), invoice totals, customer balances, and partner shares.
 
 ## Deployment
 
-### Backend → Railway
+### Single service on Railway (recommended — one URL for the whole app)
 
-1. Create a Railway project, add a **PostgreSQL** plugin.
-2. Add a service from this repo with **root directory `backend`**.
-3. Set variables: `DATABASE_URL` (from the Postgres plugin), `JWT_SECRET`,
-   `CORS_ORIGIN` (your Cloudflare Pages URL), `ADMIN_EMAIL`, `ADMIN_PASSWORD`.
-4. Build command `npm run build` runs `prisma generate` automatically; the
-   start command is `npm start`.
-5. One-off setup (Railway shell or locally with the prod URL):
-   `npx prisma db push && npm run seed`.
+The Express backend serves the built React app from `backend/public`, with an
+SPA fallback so client-side routes work. The repo ships a `railway.json` that
+builds both halves (`npm run build:full`) and starts the backend
+(`npm run start:backend`).
 
-### Frontend → Cloudflare Pages
+1. Create a Railway project, add a **PostgreSQL** database.
+2. Add a service from this repo with **no root directory** (repo root).
+3. Set variables: `DATABASE_URL` (reference `${{Postgres.DATABASE_URL}}`),
+   `JWT_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and for invoice parsing
+   `INVOICE_PARSER_PROVIDER=docuparse` + `DOCUPARSE_API_KEY`.
+   Do **not** set `PORT` — Railway injects it. `CORS_ORIGIN` is not needed
+   here because the frontend is same-origin.
+4. One-off setup (Railway shell): `npx prisma db push && npm run seed`
+   (run from the `backend` directory).
+5. Your Railway domain (e.g. `https://<app>.up.railway.app`) now serves both
+   the app UI (`/`) and the API (`/api/health`).
 
-1. Connect the repo, framework preset **Vite**.
-2. Build command `npm run build`, output directory `dist`.
-3. Set `VITE_API_URL` to the Railway backend URL.
+### Split deploy (alternative): Railway backend + Cloudflare Pages frontend
+
+If you prefer a CDN-hosted frontend:
+
+1. Backend service on Railway with **root directory `backend`**, build
+   `npm run build`, start `npm start`. Set `CORS_ORIGIN` to your Pages URL.
+2. Frontend on Cloudflare Pages: framework preset **Vite**, build
+   `npm run build`, output `dist`, env `VITE_API_URL` = the Railway URL.
 
 ## AI invoice parsing (beta)
 
