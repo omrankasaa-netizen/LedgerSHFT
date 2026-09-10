@@ -60,4 +60,37 @@ describe("mapAzureInvoiceFields", () => {
       { productName: "Widget", productCode: undefined, quantityImported: 1, unitPurchasePrice: 0 },
     ]);
   });
+
+  it("derives unit price from the line total and currency from SubTotal", () => {
+    // Shipping-invoice style: one "value" column → Azure fills Amount, not UnitPrice.
+    const parsed = mapAzureInvoiceFields({
+      CurrencyCode: { valueString: "" },
+      SubTotal: { valueCurrency: { amount: 12600.09, currencyCode: "EUR" } },
+      Items: {
+        valueArray: [
+          {
+            valueObject: {
+              Description: { valueString: "MacBook Air 13-inch" },
+              Quantity: { valueNumber: 1 },
+              Amount: { valueCurrency: { amount: 2394.0, currencyCode: "EUR" } },
+            },
+          },
+          {
+            valueObject: {
+              Description: { valueString: "Cable" },
+              Quantity: { valueNumber: 3 },
+              Amount: { valueCurrency: { amount: 10.0, currencyCode: "EUR" } },
+            },
+          },
+        ],
+      },
+    });
+
+    expect(parsed.currency).toBe("EUR");
+    expect(parsed.productsSubtotalAmount).toBe(12600.09);
+    expect(parsed.lineItems).toEqual([
+      { productName: "MacBook Air 13-inch", productCode: undefined, quantityImported: 1, unitPurchasePrice: 2394 },
+      { productName: "Cable", productCode: undefined, quantityImported: 3, unitPurchasePrice: 3.33 },
+    ]);
+  });
 });
