@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/api/entities";
 import { PageHeader, Loading } from "@/components/ui/common";
 import { formatMoney, invoiceOutstanding } from "@/lib/finance";
 import { ArrowLeft, Save } from "lucide-react";
@@ -37,9 +37,9 @@ export default function PaymentForm() {
   useEffect(() => {
     (async () => {
       const [custs, inv, pays] = await Promise.all([
-        base44.entities.Customer.list(),
-        base44.entities.Invoice.list(),
-        base44.entities.Payment.list(),
+        db.entities.Customer.list(),
+        db.entities.Invoice.list(),
+        db.entities.Payment.list(),
       ]);
       setCustomers(custs);
       setInvoices(inv);
@@ -73,7 +73,7 @@ export default function PaymentForm() {
     setSaving(true);
     try {
       const data = { ...form, invoice_id: form.invoice_id || null, amount: Number(form.amount) };
-      await base44.entities.Payment.create(data);
+      await db.entities.Payment.create(data);
       if (form.invoice_id) {
         const inv = invoices.find((i) => i.id === form.invoice_id);
         const newPaid = payments.filter((p) => p.invoice_id === form.invoice_id).reduce((s, p) => s + (Number(p.amount) || 0), 0) + Number(form.amount);
@@ -81,7 +81,7 @@ export default function PaymentForm() {
           let status = inv.status;
           if (newPaid >= (Number(inv.total_amount) || 0)) status = "Paid";
           else if (newPaid > 0) status = "Partially Paid";
-          if (status !== inv.status) await base44.entities.Invoice.update(form.invoice_id, { status });
+          if (status !== inv.status) await db.entities.Invoice.update(form.invoice_id, { status });
         }
       }
       toast({ title: t("paymentForm.saved") });
