@@ -21,7 +21,7 @@ export interface AzureField {
 interface AzureAnalyzeResponse {
   status?: "notStarted" | "running" | "succeeded" | "failed" | string;
   analyzeResult?: { documents?: { fields?: Record<string, AzureField> }[] };
-  error?: { message?: string };
+  error?: { code?: string; message?: string; innererror?: { code?: string; message?: string } };
 }
 
 /** Free tier (F0) invoice analysis usually finishes in a few seconds. */
@@ -149,13 +149,17 @@ export class AzureDocIntelligenceParsingService implements InvoiceParsingService
 
   /** Translate Azure HTTP errors into actionable ApiErrors. */
   private throwAzureError(status: number, body: AzureAnalyzeResponse | null): never {
-    const message = body?.error?.message;
+    // Azure puts the useful reason in error.innererror (e.g. InvalidContentLength
+    // when a file exceeds the F0 free tier's 4 MB limit) — surface it.
+    const inner = body?.error?.innererror;
+    const detail = inner?.message || body?.error?.message;
+    const label = inner?.code ? `[${inner.code}] ` : "";
     if (status === 401 || status === 403) {
-      throw new ApiError(403, message || "Azure rejected the API key. Check AZURE_DOC_INTEL_KEY.");
+      throw new ApiError(403, detail || "Azure rejected the API key. Check AZURE_DOC_INTEL_KEY.");
     }
     if (status === 429) {
       throw new ApiError(429, "Azure free-tier quota reached (500 pages/month or rate limit).");
     }
-    throw new ApiError(502, message || `Azure Document Intelligence error (${status})`);
+    throw new ApiError(502, `${label}${detail || `Azure Document Intelligence error (${status})`}`);
   }
 }
