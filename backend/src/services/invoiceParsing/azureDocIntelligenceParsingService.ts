@@ -45,18 +45,32 @@ export function mapAzureInvoiceFields(fields: Record<string, AzureField>): Parse
     supplierName: text(fields.VendorName),
     supplierInvoiceNumber: text(fields.InvoiceId),
     date: fields.InvoiceDate?.valueDate ?? text(fields.InvoiceDate),
-    currency: fields.CurrencyCode?.valueCurrency?.currencyCode ?? text(fields.CurrencyCode),
+    // Azure sometimes leaves CurrencyCode blank; the currency on the money
+    // fields (SubTotal/Total) is more reliable for symbol-only invoices.
+    currency:
+      fields.CurrencyCode?.valueCurrency?.currencyCode ??
+      text(fields.CurrencyCode) ??
+      fields.SubTotal?.valueCurrency?.currencyCode ??
+      fields.Total?.valueCurrency?.currencyCode,
     productsSubtotalAmount: money(fields.SubTotal),
     lineItems: items
       .map((item): ParsedInvoiceLineItem | null => {
         const obj = item.valueObject ?? {};
         const productName = text(obj.Description);
         if (!productName) return null;
+        const quantity = obj.Quantity?.valueNumber ?? 1;
+        // Invoices with a single "value" column give Azure only the line
+        // total (Amount) — derive the unit price from it when missing.
+        const unitPrice =
+          money(obj.UnitPrice) ??
+          (money(obj.Amount) !== undefined && quantity > 0
+            ? Math.round((money(obj.Amount)! / quantity) * 100) / 100
+            : 0);
         return {
           productName,
           productCode: text(obj.ProductCode),
-          quantityImported: obj.Quantity?.valueNumber ?? 1,
-          unitPurchasePrice: money(obj.UnitPrice) ?? 0,
+          quantityImported: quantity,
+          unitPurchasePrice: unitPrice,
         };
       })
       .filter((item): item is ParsedInvoiceLineItem => item !== null),
