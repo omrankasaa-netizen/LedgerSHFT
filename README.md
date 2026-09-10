@@ -1,62 +1,123 @@
-# Base44 Project
+# LedgerShift — Wholesale Payments Tracker
 
-Use this repository to run and edit the app locally, then publish changes back through Base44.
+LedgerShift is built for Lebanese wholesalers who issue invoices, sell on credit, and share profits with partners. It now includes an **Imports & Cost** layer: record supplier purchase invoices, allocate freight/duty/customs into a trusted landed cost per unit, and reuse those costs on sales invoices.
 
-Any change pushed to the repo will also be reflected in the Base44 Builder.
+## Project structure
+
+```
+/                      React (Vite) frontend — exported from Base44
+  src/pages/           Dashboard, Customers, Invoices, Payments, Reports, …
+  src/pages/PurchaseInvoices.jsx       Imports & Cost: list
+  src/pages/PurchaseInvoiceForm.jsx    Imports & Cost: 3-step form + AI upload
+  src/api/base44Client.js              legacy Base44 SDK client (existing pages)
+  src/api/backendClient.js             fetch wrapper for the self-hosted backend
+  src/api/purchaseInvoices.js          Imports & Cost API calls
+/backend               Self-hosted API (Node + TypeScript + Express + PostgreSQL)
+  prisma/schema.prisma                 data model (users, customers, partners,
+                                       invoices, payments, purchase invoices)
+  src/routes/                          REST endpoints under /api
+  src/services/invoiceParsing/         pluggable invoice-OCR (mock today)
+  src/utils/calculations.ts            pure money math (unit-tested)
+  tests/                               Jest tests for the calculations
+```
+
+> Migration status: existing pages still run on the Base44 SDK. The Imports &
+> Cost section and the new backend are the first self-hosted slice; other
+> modules move over the same pattern next.
 
 ## Prerequisites
 
-1. Clone the repository using the project's Git URL.
-2. Navigate to the project directory.
-3. Install dependencies: `npm install`.
-4. Install the Base44 CLI: `npm install -g base44@latest`.
-5. Install [Deno](https://docs.deno.com/runtime/getting_started/installation/) — the local Base44 backend runs on it.
+- Node.js 20+
+- PostgreSQL 14+ (local or hosted)
 
-Run `base44 --help` (or see the [CLI reference](https://docs.base44.com/developers/references/cli/commands/introduction)) for the full command surface.
+## Environment variables
 
-## Run Locally
+**Backend** — copy `backend/.env.example` to `backend/.env`:
 
-Three commands, from the project root:
+| Variable | Purpose |
+| --- | --- |
+| `DATABASE_URL` | PostgreSQL connection string |
+| `PORT` | API port (default 4000) |
+| `JWT_SECRET` | long random secret for signing tokens |
+| `JWT_EXPIRES_IN` | token lifetime (default `12h`) |
+| `CORS_ORIGIN` | allowed frontend origin(s), comma-separated |
+| `INVOICE_PARSER_PROVIDER` | `mock` today; plug in Azure/Google later |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | first admin account created by the seed |
 
-```bash
-base44 login   # one-time per machine
-base44 link    # one-time per clone
-base44 dev     # local backend + frontend together
-```
+**Frontend** — copy `.env.example` to `.env`:
 
-Open the frontend URL that `base44 dev` prints (typically `http://localhost:5173`).
+| Variable | Purpose |
+| --- | --- |
+| `VITE_API_URL` | base URL of the backend API |
 
-Notes:
+## Run locally
 
-- **Every fresh clone needs `base44 link`.** It writes `base44/.app.jsonc` (the app-id pointer), which is deliberately gitignored. Your app id is in the Builder URL (`app.base44.com/apps/<id>/...`); `base44 link --help` shows the non-interactive flags.
-- **`base44 dev` runs the frontend for you** (via `site.serveCommand` in this repo's `base44/config.jsonc`) — never run `npm run dev` yourself: alone it serves a UI with no backend behind it (`[base44] Proxy not enabled`, every `/api` call fails), and alongside `base44 dev` the second Vite silently takes the next port and you end up looking at the wrong one.
-- **The app must be published at least once for the UI to load under `base44 dev`.** The frontend boots by fetching app settings from the hosted app; before the first publish that fails and every page redirects to login. The local API works regardless.
-- Entities, functions, and auth run locally — entity data is **in-memory only**, wiped when `base44 dev` restarts. Everything else (Core integrations, OAuth login) is forwarded to your deployed app. Full breakdown: [Local development overview](https://docs.base44.com/developers/backend/overview/local-dev/local-development-overview).
-
-## Frontend Only, Hosted Backend
-
-To work on just the frontend against your app's live hosted backend:
+Terminal 1 — backend:
 
 ```bash
-base44 dev --remote
+cd backend
+npm install
+npx prisma db push     # create the tables in your database
+npm run seed           # create the first admin user
+npm run dev            # http://localhost:4000
 ```
 
-⚠️ In this mode writes go to your app's **production data** — plain `base44 dev` keeps everything local.
-
-## Publish Your Changes
-
-After pushing your changes to git, open the Base44 dashboard and publish the app:
+Terminal 2 — frontend (Base44 local backend for the legacy pages):
 
 ```bash
-base44 dashboard open
+npm install
+base44 login && base44 link   # once per machine / clone
+base44 dev                    # http://localhost:5173
 ```
 
-This repo syncs to Base44 through git, so publish from the dashboard rather than `base44 deploy` — a CLI deploy ships your local tree directly, bypassing the sync, and the deployed state silently diverges from the repo.
+Sign in to the **Imports & Cost** section with the seeded admin account
+(`admin@ledgershift.local` / `admin12345` — change these in `backend/.env`).
 
-## Docs & Support
+## Tests
 
-GitHub integration: [https://docs.base44.com/developers/app-code/local-development/github](https://docs.base44.com/developers/app-code/local-development/github)
+```bash
+cd backend
+npm test
+```
 
-Local development: [https://docs.base44.com/developers/backend/overview/local-dev/local-development-overview](https://docs.base44.com/developers/backend/overview/local-dev/local-development-overview)
+Covers the core money math: landed-cost allocation (incl. rounding-drift
+reconciliation), invoice totals, customer balances, and partner shares.
 
-Support: [https://app.base44.com/support](https://app.base44.com/support)
+## Deployment
+
+### Backend → Railway
+
+1. Create a Railway project, add a **PostgreSQL** plugin.
+2. Add a service from this repo with **root directory `backend`**.
+3. Set variables: `DATABASE_URL` (from the Postgres plugin), `JWT_SECRET`,
+   `CORS_ORIGIN` (your Cloudflare Pages URL), `ADMIN_EMAIL`, `ADMIN_PASSWORD`.
+4. Build command `npm run build` runs `prisma generate` automatically; the
+   start command is `npm start`.
+5. One-off setup (Railway shell or locally with the prod URL):
+   `npx prisma db push && npm run seed`.
+
+### Frontend → Cloudflare Pages
+
+1. Connect the repo, framework preset **Vite**.
+2. Build command `npm run build`, output directory `dist`.
+3. Set `VITE_API_URL` to the Railway backend URL.
+
+## AI invoice parsing (beta)
+
+`POST /api/purchase-invoices/parse-upload` accepts a supplier invoice PDF or
+image and returns a candidate purchase invoice for review. The provider is
+pluggable via `InvoiceParsingService` (`backend/src/services/invoiceParsing/`);
+today a deterministic **mock** returns sample data so the upload → review →
+confirm flow can be used end-to-end. To go live, add an Azure Document
+Intelligence / Google Document AI implementation and set
+`INVOICE_PARSER_PROVIDER` accordingly.
+
+## Base44 sync (legacy)
+
+The repository still syncs with the Base44 Builder for the legacy frontend.
+See the Base44 docs linked below for `base44 dev` / publish details — note
+that anything under `/backend` is ignored by Base44 and deploys only to
+Railway.
+
+- GitHub integration: https://docs.base44.com/developers/app-code/local-development/github
+- Local development: https://docs.base44.com/developers/backend/overview/local-dev/local-development-overview
