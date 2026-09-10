@@ -1,5 +1,7 @@
 import express from "express";
 import cors from "cors";
+import fs from "fs";
+import path from "path";
 import { config } from "./config";
 import { errorHandler } from "./middleware/errorHandler";
 import authRouter from "./routes/auth";
@@ -27,6 +29,16 @@ export function createApp() {
   app.use("/api/purchase-invoices", purchaseInvoicesRouter);
   app.use("/api/purchase-invoice-line-items", purchaseInvoiceLineItemsRouter);
   app.use("/api/reports", reportsRouter);
+
+  // Single-service deploy: serve the built frontend from backend/public.
+  // SPA fallback — any non-API GET returns index.html so client routes work.
+  if (fs.existsSync(config.staticDir)) {
+    app.use(express.static(config.staticDir));
+    app.get("*", (req, res, next) => {
+      if (req.path.startsWith("/api/")) return next();
+      res.sendFile(path.join(config.staticDir, "index.html"));
+    });
+  }
 
   app.use(errorHandler);
   return app;

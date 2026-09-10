@@ -1,4 +1,5 @@
 import dotenv from "dotenv";
+import path from "path";
 
 dotenv.config();
 
@@ -19,6 +20,8 @@ export const config = {
   docuParseTimeoutMs: Number(process.env.DOCUPARSE_TIMEOUT_MS || 60000),
   adminEmail: process.env.ADMIN_EMAIL || "admin@ledgershift.local",
   adminPassword: process.env.ADMIN_PASSWORD || "admin12345",
+  // Folder with the built frontend, served when present (single-service deploy).
+  staticDir: process.env.STATIC_DIR || path.join(__dirname, "..", "public"),
   isProduction: process.env.NODE_ENV === "production",
 };
 
