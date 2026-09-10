@@ -1,0 +1,157 @@
+// LedgerShift data model.
+// Money is stored as Float and rounded to 2 decimals in the calculation layer
+// (unit costs to 4 decimals). If amounts ever need exact decimal arithmetic,
+// migrate these columns to Prisma `Decimal` — the API shape stays the same.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         String   @default("viewer") // admin | manager | accountant | viewer
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Customer {
+  id        String    @id @default(cuid())
+  name      String
+  type      String?
+  city      String?
+  phone     String?
+  email     String?
+  notes     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  invoices  Invoice[]
+  payments  Payment[]
+}
+
+model Partner {
+  id                String    @id @default(cuid())
+  name              String
+  role              String?
+  defaultShareType  String    @default("none") // none | percentage | fixed_amount
+  defaultShareValue Float     @default(0)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  invoices          Invoice[]
+}
+
+model Invoice {
+  id                 String            @id @default(cuid())
+  invoiceNumber      String?
+  customerId         String
+  customer           Customer          @relation(fields: [customerId], references: [id])
+  partnerId          String?
+  partner            Partner?          @relation(fields: [partnerId], references: [id])
+  date               DateTime          @db.Date
+  currency           String            @default("USD")
+  subtotalAmount     Float             @default(0)
+  discountAmount     Float             @default(0)
+  taxAmount          Float             @default(0)
+  totalAmount        Float             @default(0)
+  totalCostAmount    Float             @default(0)
+  grossProfitAmount  Float             @default(0)
+  partnerShareAmount Float             @default(0)
+  status             String            @default("Draft") // Draft | Issued | Partially Paid | Paid | Overdue
+  notes              String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  lineItems          InvoiceLineItem[]
+  payments           Payment[]
+
+  @@index([customerId])
+  @@index([status])
+  @@index([date])
+}
+
+model InvoiceLineItem {
+  id                      String   @id @default(cuid())
+  invoiceId               String
+  invoice                 Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  productName             String
+  productCode             String?
+  quantity                Float
+  unitPrice               Float
+  lineTotal               Float
+  unitCost                Float?
+  lineCostTotal           Float?
+  // Link to the import line this cost came from (nullable = manual cost).
+  purchaseInvoiceLineItemId String?
+  purchaseInvoiceLineItem   PurchaseInvoiceLineItem? @relation(fields: [purchaseInvoiceLineItemId], references: [id], onDelete: SetNull)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@index([invoiceId])
+}
+
+model Payment {
+  id         String    @id @default(cuid())
+  customerId String
+  customer   Customer  @relation(fields: [customerId], references: [id])
+  invoiceId  String?
+  invoice    Invoice?  @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  date       DateTime  @db.Date
+  currency   String    @default("USD")
+  amount     Float
+  method     String    @default("cash") // cash | bank_transfer | cheque | remittance | other
+  reference  String?
+  notes      String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([customerId])
+  @@index([invoiceId])
+}
+
+model PurchaseInvoice {
+  id                     String                   @id @default(cuid())
+  supplierName           String
+  supplierInvoiceNumber  String?
+  originCountry          String?
+  date                   DateTime                 @db.Date
+  currency               String                   @default("USD")
+  productsSubtotalAmount Float                    @default(0)
+  freightAmount          Float                    @default(0)
+  dutyAmount             Float                    @default(0)
+  customsFeesAmount      Float                    @default(0)
+  otherFeesAmount        Float                    @default(0)
+  totalLandedCostAmount  Float                    @default(0)
+  notes                  String?
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+  lineItems              PurchaseInvoiceLineItem[]
+
+  @@index([supplierName])
+  @@index([date])
+}
+
+model PurchaseInvoiceLineItem {
+  id                            String   @id @default(cuid())
+  purchaseInvoiceId             String
+  purchaseInvoice               PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id], onDelete: Cascade)
+  productCode                   String?
+  productName                   String
+  quantityImported              Float
+  unitPurchasePrice             Float
+  linePurchaseTotal             Float
+  allocatedUnitLandedCost       Float?
+  allocatedLineLandedCostTotal  Float?
+  createdAt                     DateTime @default(now())
+  updatedAt                     DateTime @updatedAt
+  invoiceLineItems              InvoiceLineItem[]
+
+  @@index([purchaseInvoiceId])
+  @@index([productCode])
+  @@index([productName])
+}
