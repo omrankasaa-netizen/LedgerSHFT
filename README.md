@@ -16,7 +16,7 @@ LedgerShift is built for Lebanese wholesalers who issue invoices, sell on credit
   prisma/schema.prisma                 data model (users, customers, partners,
                                        invoices, payments, purchase invoices)
   src/routes/                          REST endpoints under /api
-  src/services/invoiceParsing/         pluggable invoice-OCR (mock/mindee/docuparse)
+  src/services/invoiceParsing/         pluggable invoice-OCR (mock/azure/mindee/docuparse)
   src/utils/calculations.ts            pure money math (unit-tested)
   tests/                               Jest tests for the calculations
 ```
@@ -40,7 +40,9 @@ LedgerShift is built for Lebanese wholesalers who issue invoices, sell on credit
 | `JWT_SECRET` | long random secret for signing tokens |
 | `JWT_EXPIRES_IN` | token lifetime (default `12h`) |
 | `CORS_ORIGIN` | allowed frontend origin(s), comma-separated |
-| `INVOICE_PARSER_PROVIDER` | `mock` (default), `mindee`, or `docuparse` |
+| `INVOICE_PARSER_PROVIDER` | `mock` (default), `azure`, `mindee`, or `docuparse` |
+| `AZURE_DOC_INTEL_KEY` | Azure Document Intelligence key, required for the `azure` provider |
+| `AZURE_DOC_INTEL_ENDPOINT` | Azure endpoint, e.g. `https://<resource>.cognitiveservices.azure.com` |
 | `MINDEE_API_KEY` | Mindee key, required for the `mindee` provider |
 | `MINDEE_BASE_URL` | optional, default `https://api.mindee.net` |
 | `DOCUPARSE_API_KEY` | DocuParse key, required for the `docuparse` provider |
@@ -100,7 +102,8 @@ builds both halves (`npm run build:full`) and starts the backend
 2. Add a service from this repo with **no root directory** (repo root).
 3. Set variables: `DATABASE_URL` (reference `${{Postgres.DATABASE_URL}}`),
    `JWT_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and for invoice parsing
-   `INVOICE_PARSER_PROVIDER=mindee` + `MINDEE_API_KEY`.
+   `INVOICE_PARSER_PROVIDER=azure` + `AZURE_DOC_INTEL_KEY` +
+   `AZURE_DOC_INTEL_ENDPOINT`.
    Do **not** set `PORT` — Railway injects it. `CORS_ORIGIN` is not needed
    here because the frontend is same-origin.
 4. One-off setup (Railway shell, from `/root/repo`): `npm run setup:db`.
@@ -124,10 +127,16 @@ If you prefer a CDN-hosted frontend:
 `POST /api/purchase-invoices/parse-upload` accepts a supplier invoice PDF or
 image and returns a candidate purchase invoice for review. The provider is
 pluggable via `InvoiceParsingService` (`backend/src/services/invoiceParsing/`).
-Three providers ship today:
+Four providers ship today:
 
 - `mock` (default) — deterministic sample data so the upload → review →
   confirm flow can be used end-to-end without external calls.
+- `azure` — real extraction via Azure Document Intelligence
+  prebuilt-invoice (free F0 tier: 500 pages/month). Set
+  `INVOICE_PARSER_PROVIDER=azure` plus `AZURE_DOC_INTEL_KEY` and
+  `AZURE_DOC_INTEL_ENDPOINT`. The file is posted to the `:analyze`
+  endpoint and the operation is polled until the parsed header fields and
+  line items land in the editable review table before saving.
 - `mindee` — real extraction via [Mindee](https://www.mindee.com) Invoice
   V4. Set `INVOICE_PARSER_PROVIDER=mindee` plus `MINDEE_API_KEY`
   (optionally `MINDEE_BASE_URL`, default `https://api.mindee.net`). The
