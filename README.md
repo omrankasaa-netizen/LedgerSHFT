@@ -5,25 +5,24 @@ LedgerShift is built for Lebanese wholesalers who issue invoices, sell on credit
 ## Project structure
 
 ```
-/                      React (Vite) frontend — exported from Base44
+/                      React (Vite) frontend
   src/pages/           Dashboard, Customers, Invoices, Payments, Reports, …
   src/pages/PurchaseInvoices.jsx       Imports & Cost: list
   src/pages/PurchaseInvoiceForm.jsx    Imports & Cost: 3-step form + AI upload
-  src/api/base44Client.js              legacy Base44 SDK client (existing pages)
-  src/api/backendClient.js             fetch wrapper for the self-hosted backend
+  src/api/backendClient.js             fetch wrapper (JWT) for the backend
+  src/api/entities.js                  self-hosted data layer for all pages
   src/api/purchaseInvoices.js          Imports & Cost API calls
-/backend               Self-hosted API (Node + TypeScript + Express + PostgreSQL)
+/backend               API (Node + TypeScript + Express + PostgreSQL)
   prisma/schema.prisma                 data model (users, customers, partners,
                                        invoices, payments, purchase invoices)
   src/routes/                          REST endpoints under /api
-  src/services/invoiceParsing/         pluggable invoice-OCR (mock today)
+  src/services/invoiceParsing/         pluggable invoice-OCR (mock/docuparse)
   src/utils/calculations.ts            pure money math (unit-tested)
   tests/                               Jest tests for the calculations
 ```
 
-> Migration status: existing pages still run on the Base44 SDK. The Imports &
-> Cost section and the new backend are the first self-hosted slice; other
-> modules move over the same pattern next.
+> Fully self-hosted: the frontend talks only to the `/backend` API with JWT
+> auth (roles: admin, manager, accountant, viewer). No Base44 dependency.
 
 ## Prerequisites
 
@@ -65,16 +64,16 @@ npm run seed           # create the first admin user
 npm run dev            # http://localhost:4000
 ```
 
-Terminal 2 — frontend (Base44 local backend for the legacy pages):
+Terminal 2 — frontend:
 
 ```bash
 npm install
-base44 login && base44 link   # once per machine / clone
-base44 dev                    # http://localhost:5173
+npm run dev                # http://localhost:5173 (API proxied via VITE_API_URL)
 ```
 
-Sign in to the **Imports & Cost** section with the seeded admin account
+Sign in with the seeded admin account
 (`admin@ledgershift.local` / `admin12345` — change these in `backend/.env`).
+More users are created in **Settings → User Management**.
 
 ## Tests
 
@@ -131,13 +130,3 @@ Two providers ship today:
   `DOCUPARSE_TIMEOUT_MS`, default 60000). The document is uploaded to
   DocuParse and polled until extraction completes; the parsed header fields
   and line items land in the editable review table before saving.
-
-## Base44 sync (legacy)
-
-The repository still syncs with the Base44 Builder for the legacy frontend.
-See the Base44 docs linked below for `base44 dev` / publish details — note
-that anything under `/backend` is ignored by Base44 and deploys only to
-Railway.
-
-- GitHub integration: https://docs.base44.com/developers/app-code/local-development/github
-- Local development: https://docs.base44.com/developers/backend/overview/local-dev/local-development-overview
