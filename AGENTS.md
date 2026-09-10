@@ -1,34 +1,35 @@
-# AGENTS.md
+# LedgerShift — Agent Notes
 
-## Project Context
+LedgerShift is a fully self-hosted wholesale payments tracker for Lebanese
+wholesalers. There is no Base44 (or any other hosted BaaS) dependency — the
+React frontend talks only to the Node/Express backend in `/backend` over JWT
+auth.
 
-This is a Base44 app repository. Treat it as user-owned application code, keep changes focused on the user's request, and preserve existing project conventions.
+## Layout
 
-Start with `README.md` for local setup, environment variables, and publish workflow.
+- `/src` — React 18 + Vite frontend (JSX, `@/` alias → `src/`, Tailwind,
+  shadcn/radix, react-router-dom v6, bilingual en/ar with RTL).
+- `/src/api/backendClient.js` — fetch wrapper that attaches the JWT
+  (`localStorage` key `ledgershift_api_token`).
+- `/src/api/entities.js` — data layer used by all pages (`db.entities.*`),
+  maps between the frontend's snake_case and the API's camelCase.
+- `/backend` — Express 4 + TypeScript (CommonJS) + Prisma 6 + PostgreSQL.
+  Routes under `/api`, zod-validated inputs, role-based access
+  (admin > manager > accountant > viewer).
 
-## Base44 References
+## Commands
 
-- CLI overview: https://docs.base44.com/developers/references/cli/get-started/overview.md
-- Agent skills: https://docs.base44.com/developers/backend/overview/skills.md
+- Frontend dev: `npm run dev` (needs `VITE_API_URL` pointing at the backend).
+- Backend dev: `cd backend && npm run dev` (needs `DATABASE_URL`, `JWT_SECRET`).
+- Backend tests: `cd backend && npm test` (Jest, money-math coverage).
+- Full production build: `npm run build:full` (frontend → `backend/public`).
+- Production start: `npm run start:backend`.
 
-If your agent supports Agent Skills, install or update Base44 skills before Base44-specific work:
+## Conventions
 
-```bash
-npx skills add base44/skills
-```
-
-## Key Files
-
-- `src/`: frontend application source.
-- `src/api/base44Client.js`: frontend Base44 SDK client.
-- `vite.config.js`: Vite config and Base44 Vite plugin setup.
-- `.env.local`: local-only environment values; never commit secrets.
-
-## Working Notes
-
-- Use `base44 dev` as the default local development command when you need the local Base44 backend. It can run the backend and frontend together.
-- When docs or code mention the frontend being started automatically, that usually means the Base44 project config includes `site.serveCommand`, for example `"serveCommand": "npm run dev"` in `base44/config.jsonc`.
-- Use `npm run dev` only for frontend-only work against the hosted Base44 backend.
-- Prefer the existing Base44 CLI workflow over adding new npm scripts for Base44-specific tasks.
-- Reuse the existing SDK client and Vite plugin patterns before adding new Base44 integration paths.
-- Run the relevant checks from `package.json` before finishing code changes.
+- Keep TypeScript types on params/returns in the backend; comment non-trivial
+  functions briefly.
+- Never trust client data: validate with zod on the backend even when the
+  frontend validates too.
+- The backend recomputes invoice totals server-side; the frontend's
+  `computeInvoiceTotals` is for live preview only.

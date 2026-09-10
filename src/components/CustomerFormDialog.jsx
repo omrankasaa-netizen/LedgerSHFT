@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/api/entities";
 import { useI18n } from "@/lib/i18n";
 import FieldLabel from "@/components/FieldLabel";
 
@@ -40,9 +40,9 @@ export default function CustomerFormDialog({ open, onOpenChange, onSaved, custom
     setSaving(true);
     try {
       if (customer?.id) {
-        await base44.entities.Customer.update(customer.id, form);
+        await db.entities.Customer.update(customer.id, form);
       } else {
-        await base44.entities.Customer.create(form);
+        await db.entities.Customer.create(form);
       }
       onSaved?.();
       onOpenChange?.(false);

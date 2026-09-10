@@ -12,6 +12,7 @@ import paymentsRouter from "./routes/payments";
 import purchaseInvoicesRouter from "./routes/purchaseInvoices";
 import purchaseInvoiceLineItemsRouter from "./routes/purchaseInvoiceLineItems";
 import reportsRouter from "./routes/reports";
+import usersRouter from "./routes/users";
 
 export function createApp() {
   const app = express();
@@ -29,6 +30,7 @@ export function createApp() {
   app.use("/api/purchase-invoices", purchaseInvoicesRouter);
   app.use("/api/purchase-invoice-line-items", purchaseInvoiceLineItemsRouter);
   app.use("/api/reports", reportsRouter);
+  app.use("/api/users", usersRouter);
 
   // Single-service deploy: serve the built frontend from backend/public.
   // SPA fallback — any non-API GET returns index.html so client routes work.

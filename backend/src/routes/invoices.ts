@@ -194,6 +194,23 @@ router.put(
   }),
 );
 
+// PATCH /api/invoices/:id/status — lightweight status change without resending lines.
+router.patch(
+  "/:id/status",
+  requireRole("accountant"),
+  asyncHandler(async (req, res) => {
+    const body = validate(z.object({ status: z.enum(INVOICE_STATUSES) }), req.body);
+    const existing = await prisma.invoice.findUnique({ where: { id: req.params.id } });
+    if (!existing) throw new ApiError(404, "Invoice not found");
+    const updated = await prisma.invoice.update({
+      where: { id: existing.id },
+      data: { status: body.status },
+      include: { lineItems: true, payments: true },
+    });
+    res.json(updated);
+  }),
+);
+
 // DELETE /api/invoices/:id
 router.delete(
   "/:id",

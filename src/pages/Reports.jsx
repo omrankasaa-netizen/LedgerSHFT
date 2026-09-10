@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/api/entities";
 import { PageHeader, Table, Loading } from "@/components/ui/common";
 import { formatMoney, customerOutstanding, monthKey, monthLabel } from "@/lib/finance";
 import { Download } from "lucide-react";
@@ -19,10 +19,10 @@ export default function Reports() {
     (async () => {
       try {
         const [custs, prts, inv, pays] = await Promise.all([
-          base44.entities.Customer.list(),
-          base44.entities.Partner.list(),
-          base44.entities.Invoice.list(),
-          base44.entities.Payment.list(),
+          db.entities.Customer.list(),
+          db.entities.Partner.list(),
+          db.entities.Invoice.list(),
+          db.entities.Payment.list(),
         ]);
         setCustomers(custs);
         setPartners(prts);
@@ -71,7 +71,7 @@ export default function Reports() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
-      <PageHeader         titleKey="reports.title" subtitle={t("reports.subtitle")} />
+      <PageHeader titleKey="reports.title" subtitle={t("reports.subtitle")} />
 
       <div className="mb-8">
         <div className="flex items-center justify-between mb-3">

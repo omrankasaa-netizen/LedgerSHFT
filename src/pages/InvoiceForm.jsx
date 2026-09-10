@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/api/entities";
 import { PageHeader, Loading } from "@/components/ui/common";
 import { computeInvoiceTotals, formatMoney } from "@/lib/finance";
 import { ArrowLeft, Plus, Trash2, Save, CheckCircle2, PackageSearch } from "lucide-react";
@@ -26,7 +26,6 @@ export default function InvoiceForm() {
   const [saving, setSaving] = useState(false);
   const [customers, setCustomers] = useState([]);
   const [partners, setPartners] = useState([]);
-  const [existingLines, setExistingLines] = useState([]);
   // Index of the line row the import picker is targeting (null = closed).
   const [pickerIndex, setPickerIndex] = useState(null);
 
@@ -42,13 +41,13 @@ export default function InvoiceForm() {
   useEffect(() => {
     (async () => {
       const [custs, prts] = await Promise.all([
-        base44.entities.Customer.list(),
-        base44.entities.Partner.list(),
+        db.entities.Customer.list(),
+        db.entities.Partner.list(),
       ]);
       setCustomers(custs);
       setPartners(prts);
       if (id) {
-        const inv = await base44.entities.Invoice.get(id);
+        const inv = await db.entities.Invoice.get(id);
         setHeader({
           invoice_number: inv.invoice_number || "", customer_id: inv.customer_id || "",
           partner_id: inv.partner_id || "", date: inv.date || new Date().toISOString().slice(0, 10),
@@ -56,9 +55,8 @@ export default function InvoiceForm() {
           tax_amount: inv.tax_amount || 0, total_cost_amount: inv.total_cost_amount || 0,
           status: inv.status || "Draft", notes: inv.notes || "",
         });
-        const allLines = await base44.entities.InvoiceLineItem.list();
-        setExistingLines(allLines.filter((l) => l.invoice_id === id));
-        setLines(allLines.filter((l) => l.invoice_id === id).map((l) => ({
+        // Line items come embedded with the invoice.
+        setLines((inv.line_items || []).map((l) => ({
           id: l.id, product_name: l.product_name, product_code: l.product_code || "",
           quantity: l.quantity, unit_price: l.unit_price, unit_cost: l.unit_cost || 0,
           purchase_invoice_line_item_id: l.purchase_invoice_line_item_id || null,
@@ -103,20 +101,19 @@ export default function InvoiceForm() {
         total_cost_amount: totals.costTotal, gross_profit_amount: totals.grossProfit,
         partner_share_amount: totals.partnerShare, status: markPaid ? "Paid" : header.status,
       };
-      let savedId = id;
-      if (id) { await base44.entities.Invoice.update(id, invoiceData); }
-      else { const created = await base44.entities.Invoice.create(invoiceData); savedId = created.id; }
+      // Header + lines go in one request; the backend recomputes all totals
+      // and replaces the line set atomically.
       const lineData = lines.map((l) => ({
-        invoice_id: savedId, product_name: l.product_name, product_code: l.product_code || null,
+        product_name: l.product_name, product_code: l.product_code || null,
         quantity: Number(l.quantity) || 0, unit_price: Number(l.unit_price) || 0,
-        line_total: (Number(l.quantity) || 0) * (Number(l.unit_price) || 0),
-        unit_cost: Number(l.unit_cost) || 0, line_cost_total: (Number(l.quantity) || 0) * (Number(l.unit_cost) || 0),
+        unit_cost: Number(l.unit_cost) || 0,
         purchase_invoice_line_item_id: l.purchase_invoice_line_item_id || null,
       }));
-      if (id) { for (const ol of existingLines) { await base44.entities.InvoiceLineItem.delete(ol.id); } }
-      await base44.entities.InvoiceLineItem.bulkCreate(lineData);
+      let savedId = id;
+      if (id) { await db.entities.Invoice.update(id, invoiceData, lineData); }
+      else { const created = await db.entities.Invoice.create(invoiceData, lineData); savedId = created.id; }
       if (markPaid) {
-        await base44.entities.Payment.create({
+        await db.entities.Payment.create({
           customer_id: header.customer_id, invoice_id: savedId,
           date: new Date().toISOString().slice(0, 10), currency: header.currency,
           amount: totals.total, method: "cash", reference: "Full payment on invoice",

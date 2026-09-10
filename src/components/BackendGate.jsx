@@ -6,9 +6,9 @@ import { useI18n } from "@/lib/i18n";
 import { Lock } from "lucide-react";
 
 /**
- * Gate for pages that talk to the self-hosted backend. While the app is
- * mid-migration off Base44, backend pages need their own JWT — this shows a
- * small sign-in card when no token is stored, and renders children otherwise.
+ * Gate for pages that talk to the self-hosted backend. Shows a small
+ * sign-in card when no JWT is stored, and renders children otherwise.
+ * (The app shell already requires login, so this is mostly a fallback.)
  */
 export default function BackendGate({ children }) {
   const { t } = useI18n();

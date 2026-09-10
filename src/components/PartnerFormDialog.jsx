@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/api/entities";
 import { useI18n } from "@/lib/i18n";
 import FieldLabel from "@/components/FieldLabel";
 
@@ -42,9 +42,9 @@ export default function PartnerFormDialog({ open, onOpenChange, onSaved, partner
     setSaving(true);
     try {
       if (partner?.id) {
-        await base44.entities.Partner.update(partner.id, form);
+        await db.entities.Partner.update(partner.id, form);
       } else {
-        await base44.entities.Partner.create(form);
+        await db.entities.Partner.create(form);
       }
       onSaved?.();
       onOpenChange?.(false);

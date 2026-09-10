@@ -2,9 +2,10 @@ import React, { useState } from "react";
 import { Link, useLocation, Outlet } from "react-router-dom";
 import {
   LayoutDashboard, Users, Handshake, FileText, Wallet,
-  BarChart3, Settings, Menu, X, BookOpen, Ship,
+  BarChart3, Settings, Menu, X, BookOpen, Ship, LogOut,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { useAuth } from "@/lib/AuthContext";
 import LanguageToggle from "@/components/LanguageToggle";
 
 const navItems = [
@@ -21,6 +22,7 @@ const navItems = [
 export default function AppLayout() {
   const location = useLocation();
   const { t } = useI18n();
+  const { user, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const isActive = (path) =>
@@ -60,8 +62,18 @@ export default function AppLayout() {
           );
         })}
       </nav>
-      <div className="px-5 py-3 text-[11px] text-muted-foreground border-t border-sidebar-border">
-        v1.0 · Prototype
+      <div className="px-4 py-3 border-t border-sidebar-border flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-xs font-medium text-sidebar-foreground truncate">{user?.name || user?.email}</div>
+          <div className="text-[11px] text-muted-foreground">{t(`userRole.${user?.role || "viewer"}`)}</div>
+        </div>
+        <button
+          onClick={logout}
+          title={t("action.logout")}
+          className="text-muted-foreground hover:text-destructive transition-colors shrink-0"
+        >
+          <LogOut className="h-4 w-4" />
+        </button>
       </div>
     </div>
   );

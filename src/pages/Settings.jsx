@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/api/entities";
+import { useAuth } from "@/lib/AuthContext";
 import { PageHeader, Table, Loading, Badge } from "@/components/ui/common";
-import { UserPlus, Mail } from "lucide-react";
+import { UserPlus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -11,52 +12,67 @@ import { useToast } from "@/components/ui/use-toast";
 import { useI18n } from "@/lib/i18n";
 import FieldLabel from "@/components/FieldLabel";
 
+const ROLES = ["viewer", "accountant", "manager", "admin"];
+
 export default function Settings() {
   const { t } = useI18n();
   const { toast } = useToast();
+  const { user: me } = useAuth();
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState([]);
   const [company, setCompany] = useState({ name: "", base_currency: "USD", usd_lbp_rate: 89500 });
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState("user");
-  const [inviting, setInviting] = useState(false);
+  const [form, setForm] = useState({ name: "", email: "", password: "", role: "viewer" });
+  const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const u = await base44.entities.User.list();
-        setUsers(u);
-      } catch (e) {
-        // ignore
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
-
-  const invite = async () => {
-    if (!inviteEmail.trim()) return;
-    setInviting(true);
+  const loadUsers = async () => {
     try {
-      await base44.users.inviteUser(inviteEmail.trim(), inviteRole);
-      toast({ title: t("toast.inviteSent"), description: inviteEmail.trim() });
-      setInviteEmail("");
-      const u = await base44.entities.User.list();
-      setUsers(u);
-    } catch (e) {
-      toast({ title: t("toast.inviteFail"), description: String(e), variant: "destructive" });
+      setUsers(await db.users.list());
+    } catch {
+      // non-managers can't list users — the card just stays empty
     } finally {
-      setInviting(false);
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { loadUsers(); }, []);
+
+  // Self-hosted replacement for email invites: create the account directly.
+  const addUser = async () => {
+    if (!form.name.trim() || !form.email.trim() || form.password.length < 8) return;
+    setSaving(true);
+    try {
+      await db.users.create({
+        name: form.name.trim(), email: form.email.trim(),
+        password: form.password, role: form.role,
+      });
+      toast({ title: t("toast.userAdded"), description: form.email.trim() });
+      setForm({ name: "", email: "", password: "", role: "viewer" });
+      await loadUsers();
+    } catch (e) {
+      toast({ title: t("toast.userFail"), description: String(e?.message || e), variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removeUser = async (u) => {
+    try {
+      await db.users.remove(u.id);
+      toast({ title: t("toast.userDeleted"), description: u.email });
+      await loadUsers();
+    } catch (e) {
+      toast({ title: t("toast.userFail"), description: String(e?.message || e), variant: "destructive" });
     }
   };
 
   if (loading) return <div className="p-6"><Loading /></div>;
 
-  const roleLabel = (r) => t(`userRole.${(r || "user")}`);
+  const roleLabel = (r) => t(`userRole.${r || "viewer"}`);
+  const canSubmit = form.name.trim() && form.email.trim() && form.password.length >= 8;
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
-      <PageHeader         titleKey="settings.title" subtitle={t("settings.subtitle")} />
+      <PageHeader titleKey="settings.title" subtitle={t("settings.subtitle")} />
 
       <div className="rounded-lg border border-border bg-card p-4 mb-6">
         <h2 className="font-heading font-semibold mb-3 text-sm">{t("settings.companyProfile")}</h2>
@@ -78,32 +94,37 @@ export default function Settings() {
 
       <div className="rounded-lg border border-border bg-card p-4">
         <h2 className="font-heading font-semibold mb-3 text-sm">{t("settings.userMgmt")}</h2>
-        <div className="flex flex-col sm:flex-row gap-2 mb-4">
-          <div className="relative flex-1">
-            <Mail className="absolute top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground start-3" />
-            <Input placeholder={t("settings.inviteEmail")} value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} className="ps-9" />
-          </div>
-          <Select value={inviteRole} onValueChange={setInviteRole}>
-            <SelectTrigger className="w-full sm:w-40"><SelectValue /></SelectTrigger>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 mb-4">
+          <Input placeholder={t("settings.col.name")} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+          <Input type="email" placeholder={t("settings.inviteEmail")} value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
+          <Input type="password" placeholder={t("settings.password")} value={form.password} onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} />
+          <Select value={form.role} onValueChange={(v) => setForm((f) => ({ ...f, role: v }))}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="user">{t("userRole.user")}</SelectItem>
-              <SelectItem value="admin">{t("userRole.admin")}</SelectItem>
+              {ROLES.map((r) => <SelectItem key={r} value={r}>{roleLabel(r)}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Button onClick={invite} disabled={inviting || !inviteEmail.trim()}>
-            <UserPlus className="h-4 w-4 ms-1" /> {inviting ? t("settings.inviting") : t("settings.invite")}
+          <Button onClick={addUser} disabled={saving || !canSubmit}>
+            <UserPlus className="h-4 w-4 ms-1" /> {saving ? t("settings.inviting") : t("settings.addUser")}
           </Button>
         </div>
 
         {users.length === 0 ? (
           <p className="text-sm text-muted-foreground py-4 text-center">{t("settings.noUsers")}</p>
         ) : (
-          <Table headers={[t("settings.col.name"), t("settings.col.email"), t("settings.col.role")]}>
+          <Table headers={[t("settings.col.name"), t("settings.col.email"), t("settings.col.role"), ""]}>
             {users.map((u) => (
               <tr key={u.id} className="hover:bg-muted/40">
                 <td className="px-4 py-2.5 font-medium">{u.full_name || "—"}</td>
                 <td className="px-4 py-2.5 text-muted-foreground">{u.email}</td>
                 <td className="px-4 py-2.5"><Badge className="border-border">{roleLabel(u.role)}</Badge></td>
+                <td className="px-4 py-2.5 text-end">
+                  {me?.id !== u.id && (
+                    <button onClick={() => removeUser(u)} className="text-muted-foreground hover:text-destructive" title={t("action.delete")}>
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
           </Table>
