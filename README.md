@@ -16,7 +16,7 @@ LedgerShift is built for Lebanese wholesalers who issue invoices, sell on credit
   prisma/schema.prisma                 data model (users, customers, partners,
                                        invoices, payments, purchase invoices)
   src/routes/                          REST endpoints under /api
-  src/services/invoiceParsing/         pluggable invoice-OCR (mock/docuparse)
+  src/services/invoiceParsing/         pluggable invoice-OCR (mock/mindee/docuparse)
   src/utils/calculations.ts            pure money math (unit-tested)
   tests/                               Jest tests for the calculations
 ```
@@ -40,7 +40,9 @@ LedgerShift is built for Lebanese wholesalers who issue invoices, sell on credit
 | `JWT_SECRET` | long random secret for signing tokens |
 | `JWT_EXPIRES_IN` | token lifetime (default `12h`) |
 | `CORS_ORIGIN` | allowed frontend origin(s), comma-separated |
-| `INVOICE_PARSER_PROVIDER` | `mock` (default) or `docuparse` |
+| `INVOICE_PARSER_PROVIDER` | `mock` (default), `mindee`, or `docuparse` |
+| `MINDEE_API_KEY` | Mindee key, required for the `mindee` provider |
+| `MINDEE_BASE_URL` | optional, default `https://api.mindee.net` |
 | `DOCUPARSE_API_KEY` | DocuParse key, required for the `docuparse` provider |
 | `DOCUPARSE_BASE_URL` | optional, default `https://docuparseapi.com` |
 | `DOCUPARSE_TIMEOUT_MS` | optional poll timeout, default `60000` |
@@ -98,7 +100,7 @@ builds both halves (`npm run build:full`) and starts the backend
 2. Add a service from this repo with **no root directory** (repo root).
 3. Set variables: `DATABASE_URL` (reference `${{Postgres.DATABASE_URL}}`),
    `JWT_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and for invoice parsing
-   `INVOICE_PARSER_PROVIDER=docuparse` + `DOCUPARSE_API_KEY`.
+   `INVOICE_PARSER_PROVIDER=mindee` + `MINDEE_API_KEY`.
    Do **not** set `PORT` — Railway injects it. `CORS_ORIGIN` is not needed
    here because the frontend is same-origin.
 4. One-off setup (Railway shell, from `/root/repo`): `npm run setup:db`.
@@ -122,10 +124,16 @@ If you prefer a CDN-hosted frontend:
 `POST /api/purchase-invoices/parse-upload` accepts a supplier invoice PDF or
 image and returns a candidate purchase invoice for review. The provider is
 pluggable via `InvoiceParsingService` (`backend/src/services/invoiceParsing/`).
-Two providers ship today:
+Three providers ship today:
 
 - `mock` (default) — deterministic sample data so the upload → review →
   confirm flow can be used end-to-end without external calls.
+- `mindee` — real extraction via [Mindee](https://www.mindee.com) Invoice
+  V4. Set `INVOICE_PARSER_PROVIDER=mindee` plus `MINDEE_API_KEY`
+  (optionally `MINDEE_BASE_URL`, default `https://api.mindee.net`). The
+  predict endpoint is synchronous: one upload returns the parsed header
+  fields and line items, which land in the editable review table before
+  saving.
 - `docuparse` — real extraction via [DocuParse](https://docuparseapi.com).
   Set `INVOICE_PARSER_PROVIDER=docuparse` plus `DOCUPARSE_API_KEY`
   (optionally `DOCUPARSE_BASE_URL`, default `https://docuparseapi.com`, and
