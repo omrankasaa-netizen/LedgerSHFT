@@ -13,6 +13,10 @@ export const config = {
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "12h",
   corsOrigin: process.env.CORS_ORIGIN || "*",
   invoiceParserProvider: process.env.INVOICE_PARSER_PROVIDER || "mock",
+  // DocuParse provider settings (only used when INVOICE_PARSER_PROVIDER=docuparse)
+  docuParseApiKey: process.env.DOCUPARSE_API_KEY || "",
+  docuParseBaseUrl: process.env.DOCUPARSE_BASE_URL || "https://docuparseapi.com",
+  docuParseTimeoutMs: Number(process.env.DOCUPARSE_TIMEOUT_MS || 60000),
   adminEmail: process.env.ADMIN_EMAIL || "admin@ledgershift.local",
   adminPassword: process.env.ADMIN_PASSWORD || "admin12345",
   isProduction: process.env.NODE_ENV === "production",

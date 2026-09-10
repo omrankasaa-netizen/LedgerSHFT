@@ -41,7 +41,10 @@ LedgerShift is built for Lebanese wholesalers who issue invoices, sell on credit
 | `JWT_SECRET` | long random secret for signing tokens |
 | `JWT_EXPIRES_IN` | token lifetime (default `12h`) |
 | `CORS_ORIGIN` | allowed frontend origin(s), comma-separated |
-| `INVOICE_PARSER_PROVIDER` | `mock` today; plug in Azure/Google later |
+| `INVOICE_PARSER_PROVIDER` | `mock` (default) or `docuparse` |
+| `DOCUPARSE_API_KEY` | DocuParse key, required for the `docuparse` provider |
+| `DOCUPARSE_BASE_URL` | optional, default `https://docuparseapi.com` |
+| `DOCUPARSE_TIMEOUT_MS` | optional poll timeout, default `60000` |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | first admin account created by the seed |
 
 **Frontend** — copy `.env.example` to `.env`:
@@ -106,11 +109,17 @@ reconciliation), invoice totals, customer balances, and partner shares.
 
 `POST /api/purchase-invoices/parse-upload` accepts a supplier invoice PDF or
 image and returns a candidate purchase invoice for review. The provider is
-pluggable via `InvoiceParsingService` (`backend/src/services/invoiceParsing/`);
-today a deterministic **mock** returns sample data so the upload → review →
-confirm flow can be used end-to-end. To go live, add an Azure Document
-Intelligence / Google Document AI implementation and set
-`INVOICE_PARSER_PROVIDER` accordingly.
+pluggable via `InvoiceParsingService` (`backend/src/services/invoiceParsing/`).
+Two providers ship today:
+
+- `mock` (default) — deterministic sample data so the upload → review →
+  confirm flow can be used end-to-end without external calls.
+- `docuparse` — real extraction via [DocuParse](https://docuparseapi.com).
+  Set `INVOICE_PARSER_PROVIDER=docuparse` plus `DOCUPARSE_API_KEY`
+  (optionally `DOCUPARSE_BASE_URL`, default `https://docuparseapi.com`, and
+  `DOCUPARSE_TIMEOUT_MS`, default 60000). The document is uploaded to
+  DocuParse and polled until extraction completes; the parsed header fields
+  and line items land in the editable review table before saving.
 
 ## Base44 sync (legacy)
 
