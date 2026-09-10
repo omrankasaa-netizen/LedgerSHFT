@@ -1,7 +1,10 @@
 // Client for the self-hosted LedgerShift backend (see /backend).
-// Base URL comes from VITE_API_URL; the JWT lives in localStorage.
+// Base URL: VITE_API_URL if set; in dev, localhost:4000; in a production build
+// with no VITE_API_URL, same origin (single-service Railway deploy).
 
-const API_BASE = (import.meta.env.VITE_API_URL || "http://localhost:4000").replace(/\/$/, "");
+const API_BASE = (
+  import.meta.env.VITE_API_URL || (import.meta.env.DEV ? "http://localhost:4000" : "")
+).replace(/\/$/, "");
 const TOKEN_KEY = "ledgershift_api_token";
 
 export function getBackendToken() {
@@ -42,7 +45,7 @@ async function request(path, { method = "GET", body, formData } = {}) {
   try {
     res = await fetch(`${API_BASE}${path}`, { method, headers, body: payload });
   } catch {
-    throw new BackendError(0, `Cannot reach the LedgerShift backend at ${API_BASE}`);
+    throw new BackendError(0, `Cannot reach the LedgerShift backend at ${API_BASE || "this origin"}`);
   }
 
   const text = await res.text();
