@@ -18,6 +18,9 @@ export const config = {
   docuParseApiKey: process.env.DOCUPARSE_API_KEY || "",
   docuParseBaseUrl: process.env.DOCUPARSE_BASE_URL || "https://docuparseapi.com",
   docuParseTimeoutMs: Number(process.env.DOCUPARSE_TIMEOUT_MS || 60000),
+  // Mindee provider settings (only used when INVOICE_PARSER_PROVIDER=mindee)
+  mindeeApiKey: process.env.MINDEE_API_KEY || "",
+  mindeeBaseUrl: process.env.MINDEE_BASE_URL || "https://api.mindee.net",
   adminEmail: process.env.ADMIN_EMAIL || "admin@ledgershift.local",
   adminPassword: process.env.ADMIN_PASSWORD || "admin12345",
   // Folder with the built frontend, served when present (single-service deploy).
