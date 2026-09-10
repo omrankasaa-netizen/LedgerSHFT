@@ -21,6 +21,9 @@ export const config = {
   // Mindee provider settings (only used when INVOICE_PARSER_PROVIDER=mindee)
   mindeeApiKey: process.env.MINDEE_API_KEY || "",
   mindeeBaseUrl: process.env.MINDEE_BASE_URL || "https://api.mindee.net",
+  // Azure Document Intelligence settings (only used when INVOICE_PARSER_PROVIDER=azure)
+  azureDocIntelKey: process.env.AZURE_DOC_INTEL_KEY || "",
+  azureDocIntelEndpoint: process.env.AZURE_DOC_INTEL_ENDPOINT || "",
   adminEmail: process.env.ADMIN_EMAIL || "admin@ledgershift.local",
   adminPassword: process.env.ADMIN_PASSWORD || "admin12345",
   // Folder with the built frontend, served when present (single-service deploy).
