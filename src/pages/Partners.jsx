@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/api/entities";
 import { PageHeader, Table, Loading, EmptyState } from "@/components/ui/common";
 import { formatMoney } from "@/lib/finance";
 import { Plus, Handshake } from "lucide-react";
@@ -19,9 +19,9 @@ export default function Partners() {
   const load = async () => {
     try {
       const [p, inv, pays] = await Promise.all([
-        base44.entities.Partner.list(),
-        base44.entities.Invoice.list(),
-        base44.entities.Payment.list(),
+        db.entities.Partner.list(),
+        db.entities.Invoice.list(),
+        db.entities.Payment.list(),
       ]);
       setPartners(p);
       setInvoices(inv);
