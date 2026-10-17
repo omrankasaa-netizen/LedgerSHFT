@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { db } from "@/api/entities";
 import { PageHeader, Table, Loading, Badge } from "@/components/ui/common";
-import { formatMoney, statusColor, customerOutstanding } from "@/lib/finance";
+import { formatMoney, statusColor, customerBalancesByCurrency } from "@/lib/finance";
 import { ArrowLeft, Pencil, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -39,9 +39,8 @@ export default function CustomerDetail() {
   if (loading) return <div className="p-6"><Loading /></div>;
   if (!customer) return <div className="p-6 text-muted-foreground">{t("common.notFound")}</div>;
 
-  const totalInvoiced = invoices.reduce((s, i) => s + (Number(i.total_amount) || 0), 0);
-  const totalPaid = payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
-  const outstanding = customerOutstanding(invoices, payments);
+  // Balances stay per currency — USD and LBP are never summed together.
+  const balances = customerBalancesByCurrency(invoices, payments);
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
@@ -62,15 +61,27 @@ export default function CustomerDetail() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <div className="rounded-lg border border-border bg-card p-4">
           <div className="text-xs text-muted-foreground uppercase">{t("customerDetail.totalInvoiced")}</div>
-          <div className="font-heading text-xl font-bold mt-1">{formatMoney(totalInvoiced)}</div>
+          <div className="font-heading text-xl font-bold mt-1">
+            {balances.length === 0 ? formatMoney(0) : balances.map((b) => (
+              <div key={b.currency}>{formatMoney(b.totalInvoiced, b.currency)}</div>
+            ))}
+          </div>
         </div>
         <div className="rounded-lg border border-border bg-card p-4">
           <div className="text-xs text-muted-foreground uppercase">{t("customerDetail.totalPaid")}</div>
-          <div className="font-heading text-xl font-bold mt-1 text-emerald-600">{formatMoney(totalPaid)}</div>
+          <div className="font-heading text-xl font-bold mt-1 text-emerald-600">
+            {balances.length === 0 ? formatMoney(0) : balances.map((b) => (
+              <div key={b.currency}>{formatMoney(b.totalPaid, b.currency)}</div>
+            ))}
+          </div>
         </div>
         <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-4">
           <div className="text-xs text-muted-foreground uppercase">{t("customerDetail.outstanding")}</div>
-          <div className="font-heading text-xl font-bold mt-1 text-amber-600">{formatMoney(outstanding)}</div>
+          <div className="font-heading text-xl font-bold mt-1 text-amber-600">
+            {balances.length === 0 ? formatMoney(0) : balances.map((b) => (
+              <div key={b.currency}>{formatMoney(b.outstanding, b.currency)}</div>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -90,7 +101,8 @@ export default function CustomerDetail() {
               t("customerDetail.col.total"), t("customerDetail.col.paid"), t("customerDetail.col.outstanding"),
             ]}>
               {invoices.sort((a, b) => String(b.date).localeCompare(String(a.date))).map((inv) => {
-                const paid = payments.filter((p) => p.invoice_id === inv.id).reduce((s, p) => s + (Number(p.amount) || 0), 0);
+                // Only same-currency payments net against the invoice.
+                const paid = payments.filter((p) => p.invoice_id === inv.id && p.currency === inv.currency).reduce((s, p) => s + (Number(p.amount) || 0), 0);
                 const out = Math.max(0, (Number(inv.total_amount) || 0) - paid);
                 return (
                   <tr key={inv.id} className="hover:bg-muted/40">
@@ -135,11 +147,15 @@ export default function CustomerDetail() {
         <TabsContent value="balance" className="mt-4">
           <div className="rounded-lg border border-border bg-card p-6 max-w-md">
             <div className="space-y-3">
-              <Row label={t("customerDetail.totalInvoiced")} value={formatMoney(totalInvoiced)} />
-              <Row label={t("customerDetail.totalPaid")} value={formatMoney(totalPaid)} />
-              <div className="border-t border-border pt-3">
-                <Row label={t("customerDetail.outstandingBalance")} value={formatMoney(outstanding)} bold />
-              </div>
+              {balances.length === 0 ? (
+                <Row label={t("customerDetail.outstandingBalance")} value={formatMoney(0)} bold />
+              ) : balances.map((b) => (
+                <div key={b.currency} className="space-y-3">
+                  <Row label={`${t("customerDetail.totalInvoiced")} · ${b.currency}`} value={formatMoney(b.totalInvoiced, b.currency)} />
+                  <Row label={`${t("customerDetail.totalPaid")} · ${b.currency}`} value={formatMoney(b.totalPaid, b.currency)} />
+                  <Row label={`${t("customerDetail.outstandingBalance")} · ${b.currency}`} value={formatMoney(b.outstanding, b.currency)} bold />
+                </div>
+              ))}
             </div>
             <div className="mt-4">
               <Link to={`/payments/new?customer=${customer.id}`}>
