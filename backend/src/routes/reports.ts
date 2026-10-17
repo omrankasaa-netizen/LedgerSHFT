@@ -27,25 +27,32 @@ router.get(
       prisma.customer.count(),
     ]);
     const monthKey = new Date().toISOString().slice(0, 7);
+    // Cancelled invoices are void: they and their linked payments are
+    // excluded from every money aggregate.
+    const active = invoices.filter((i) => i.status !== "Cancelled");
+    const cancelledIds = new Set(
+      invoices.filter((i) => i.status === "Cancelled").map((i) => i.id),
+    );
+    const activePayments = payments.filter((p) => !p.invoiceId || !cancelledIds.has(p.invoiceId));
 
     const totalOutstanding = round2(
-      invoices.reduce(
+      active.reduce(
         (s, inv) => s + Math.max(0, inv.totalAmount - inv.payments.reduce((ps, p) => ps + p.amount, 0)),
         0,
       ),
     );
     const profitThisMonth = round2(
-      invoices
+      active
         .filter((i) => i.date.toISOString().slice(0, 7) === monthKey)
         .reduce((s, i) => s + i.grossProfitAmount, 0),
     );
 
     res.json({
       totalOutstanding,
-      collectedThisMonth: collectedThisMonth(payments),
+      collectedThisMonth: collectedThisMonth(activePayments),
       grossProfitThisMonth: profitThisMonth,
-      totalInvoices: invoices.length,
-      overdueInvoices: invoices.filter((i) => i.status === "Overdue").length,
+      totalInvoices: active.length,
+      overdueInvoices: active.filter((i) => i.status === "Overdue").length,
       totalCustomers: customerCount,
     });
   }),
@@ -61,8 +68,15 @@ router.get(
     });
     res.json(
       customers.map((c) => {
-        const totalInvoiced = round2(c.invoices.reduce((s, i) => s + i.totalAmount, 0));
-        const totalPaid = round2(c.payments.reduce((s, p) => s + p.amount, 0));
+        const cancelledIds = new Set(
+          c.invoices.filter((i) => i.status === "Cancelled").map((i) => i.id),
+        );
+        const totalInvoiced = round2(
+          c.invoices.filter((i) => i.status !== "Cancelled").reduce((s, i) => s + i.totalAmount, 0),
+        );
+        const totalPaid = round2(
+          c.payments.filter((p) => !p.invoiceId || !cancelledIds.has(p.invoiceId)).reduce((s, p) => s + p.amount, 0),
+        );
         return {
           customerId: c.id,
           name: c.name,
@@ -87,9 +101,11 @@ router.get(
     });
     res.json(
       partners.map((p) => {
-        const shareDue = round2(p.invoices.reduce((s, i) => s + i.partnerShareAmount, 0));
+        // A cancelled sale earns no partner share; its payments don't count as collected.
+        const activeInvoices = p.invoices.filter((i) => i.status !== "Cancelled");
+        const shareDue = round2(activeInvoices.reduce((s, i) => s + i.partnerShareAmount, 0));
         const sharePaid = round2(
-          p.invoices.reduce((s, i) => {
+          activeInvoices.reduce((s, i) => {
             const collected = i.payments.reduce((ps, pay) => ps + pay.amount, 0);
             const ratio = i.totalAmount > 0 ? Math.min(1, collected / i.totalAmount) : 1;
             return s + i.partnerShareAmount * ratio;
@@ -117,7 +133,7 @@ router.get(
     since.setDate(1);
 
     const invoices = await prisma.invoice.findMany({
-      where: { date: { gte: since } },
+      where: { date: { gte: since }, status: { not: "Cancelled" } },
       orderBy: { date: "asc" },
     });
 

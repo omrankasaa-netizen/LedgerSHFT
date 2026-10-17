@@ -38,16 +38,24 @@ export function computeInvoiceTotals(lineItems, discount = 0, tax = 0, totalCost
 
 // Outstanding for a single invoice = total - sum of linked payments
 export function invoiceOutstanding(invoice, payments = []) {
+  if (invoice.status === "Cancelled") return 0; // void documents owe nothing
   const paid = payments
     .filter((p) => p.invoice_id === invoice.id)
     .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
   return Math.max(0, (Number(invoice.total_amount) || 0) - paid);
 }
 
-// Customer outstanding across all invoices/payments
+// Customer outstanding across all invoices/payments.
+// Cancelled invoices and the payments linked to them are excluded — the
+// document is void, so neither its total nor its payments move the balance.
 export function customerOutstanding(invoices = [], payments = []) {
-  const totalInvoiced = invoices.reduce((s, inv) => s + (Number(inv.total_amount) || 0), 0);
-  const totalPaid = payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  const cancelledIds = new Set(invoices.filter((i) => i.status === "Cancelled").map((i) => i.id));
+  const totalInvoiced = invoices
+    .filter((i) => i.status !== "Cancelled")
+    .reduce((s, inv) => s + (Number(inv.total_amount) || 0), 0);
+  const totalPaid = payments
+    .filter((p) => !p.invoice_id || !cancelledIds.has(p.invoice_id))
+    .reduce((s, p) => s + (Number(p.amount) || 0), 0);
   return Math.max(0, totalInvoiced - totalPaid);
 }
 
@@ -67,6 +75,7 @@ export function statusColor(status) {
     case "Overdue": return "bg-red-100 text-red-700 border-red-200";
     case "Issued": return "bg-blue-100 text-blue-700 border-blue-200";
     case "Draft": return "bg-slate-100 text-slate-600 border-slate-200";
+    case "Cancelled": return "bg-slate-100 text-slate-400 border-slate-200 line-through";
     default: return "bg-slate-100 text-slate-600 border-slate-200";
   }
 }

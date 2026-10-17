@@ -9,7 +9,7 @@ import { computeInvoiceTotals, round2, type PartnerShareRule } from "../utils/ca
 const router = Router();
 router.use(authenticate);
 
-const INVOICE_STATUSES = ["Draft", "Issued", "Partially Paid", "Paid", "Overdue"] as const;
+const INVOICE_STATUSES = ["Draft", "Issued", "Partially Paid", "Paid", "Overdue", "Cancelled"] as const;
 
 const lineItemSchema = z.object({
   productName: z.string().trim().optional(),
@@ -178,13 +178,24 @@ router.post(
 );
 
 // PUT /api/invoices/:id — replace header + full line-item set.
+// Posted invoices are locked: once payments are recorded (or the invoice is
+// cancelled) the document must not be rewritten — cancel it instead.
 router.put(
   "/:id",
   requireRole("accountant"),
   asyncHandler(async (req, res) => {
     const body = validate(invoiceSchema, req.body);
-    const existing = await prisma.invoice.findUnique({ where: { id: req.params.id } });
+    const existing = await prisma.invoice.findUnique({
+      where: { id: req.params.id },
+      include: { payments: { select: { id: true } } },
+    });
     if (!existing) throw new ApiError(404, "Invoice not found");
+    if (existing.status === "Cancelled") {
+      throw new ApiError(409, "Cancelled invoices cannot be edited");
+    }
+    if (existing.payments.length > 0) {
+      throw new ApiError(409, "This invoice has recorded payments — cancel it instead of editing");
+    }
     await assertInvoiceNumberUnique(body.customerId, body.invoiceNumber, existing.id);
 
     const lines = await resolveLines(body.lineItems);
@@ -216,6 +227,7 @@ router.put(
 );
 
 // PATCH /api/invoices/:id/status — lightweight status change without resending lines.
+// Cancelled is terminal: you can cancel any invoice, but never un-cancel.
 router.patch(
   "/:id/status",
   requireRole("accountant"),
@@ -223,6 +235,9 @@ router.patch(
     const body = validate(z.object({ status: z.enum(INVOICE_STATUSES) }), req.body);
     const existing = await prisma.invoice.findUnique({ where: { id: req.params.id } });
     if (!existing) throw new ApiError(404, "Invoice not found");
+    if (existing.status === "Cancelled" && body.status !== "Cancelled") {
+      throw new ApiError(409, "Cancelled invoices are final and cannot be reopened");
+    }
     const updated = await prisma.invoice.update({
       where: { id: existing.id },
       data: { status: body.status },
@@ -232,13 +247,20 @@ router.patch(
   }),
 );
 
-// DELETE /api/invoices/:id
+// DELETE /api/invoices/:id — hard delete is only safe for empty drafts;
+// anything else must be cancelled so the audit trail survives.
 router.delete(
   "/:id",
   requireRole("manager"),
   asyncHandler(async (req, res) => {
-    const existing = await prisma.invoice.findUnique({ where: { id: req.params.id } });
+    const existing = await prisma.invoice.findUnique({
+      where: { id: req.params.id },
+      include: { payments: { select: { id: true } } },
+    });
     if (!existing) throw new ApiError(404, "Invoice not found");
+    if (existing.status !== "Draft" || existing.payments.length > 0) {
+      throw new ApiError(409, "Only draft invoices without payments can be deleted — cancel it instead");
+    }
     await prisma.invoice.delete({ where: { id: existing.id } });
     res.status(204).end();
   }),

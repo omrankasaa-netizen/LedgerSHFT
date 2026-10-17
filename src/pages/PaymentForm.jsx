@@ -55,7 +55,7 @@ export default function PaymentForm() {
   if (loading) return <div className="p-6"><Loading /></div>;
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
-  const customerInvoices = invoices.filter((i) => i.customer_id === form.customer_id);
+  const customerInvoices = invoices.filter((i) => i.customer_id === form.customer_id && i.status !== "Cancelled");
   const selectedInvoice = invoices.find((i) => i.id === form.invoice_id);
 
   const onCustomerChange = (v) => setForm((f) => ({ ...f, customer_id: v, invoice_id: "" }));
@@ -74,16 +74,7 @@ export default function PaymentForm() {
     try {
       const data = { ...form, invoice_id: form.invoice_id || null, amount: Number(form.amount) };
       await db.entities.Payment.create(data);
-      if (form.invoice_id) {
-        const inv = invoices.find((i) => i.id === form.invoice_id);
-        const newPaid = payments.filter((p) => p.invoice_id === form.invoice_id).reduce((s, p) => s + (Number(p.amount) || 0), 0) + Number(form.amount);
-        if (inv) {
-          let status = inv.status;
-          if (newPaid >= (Number(inv.total_amount) || 0)) status = "Paid";
-          else if (newPaid > 0) status = "Partially Paid";
-          if (status !== inv.status) await db.entities.Invoice.update(form.invoice_id, { status });
-        }
-      }
+      // The backend recomputes the invoice's payment status — no client-side update.
       toast({ title: t("paymentForm.saved") });
       navigate("/payments");
     } catch (e) {

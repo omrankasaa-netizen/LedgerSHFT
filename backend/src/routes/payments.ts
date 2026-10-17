@@ -50,6 +50,9 @@ async function validateRefs(body: z.infer<typeof paymentSchema>) {
   if (body.invoiceId) {
     const invoice = await prisma.invoice.findUnique({ where: { id: body.invoiceId } });
     if (!invoice) throw new ApiError(400, "Invoice not found");
+    if (invoice.status === "Cancelled") {
+      throw new ApiError(409, "Cannot record a payment against a cancelled invoice");
+    }
     if (invoice.customerId !== body.customerId) {
       throw new ApiError(400, "Invoice belongs to a different customer");
     }
