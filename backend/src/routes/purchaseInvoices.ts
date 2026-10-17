@@ -138,12 +138,36 @@ router.get(
   }),
 );
 
+/**
+ * Guard against duplicate imports: a supplier invoice number must be unique
+ * per supplier. Blank numbers are allowed (some documents lack one).
+ */
+async function assertSupplierInvoiceUnique(
+  supplierName: string,
+  supplierInvoiceNumber: string | null | undefined,
+  excludeId?: string,
+): Promise<void> {
+  const number = supplierInvoiceNumber?.trim();
+  if (!number) return;
+  const existing = await prisma.purchaseInvoice.findFirst({
+    where: {
+      supplierName: supplierName.trim(),
+      supplierInvoiceNumber: number,
+      ...(excludeId ? { NOT: { id: excludeId } } : {}),
+    },
+  });
+  if (existing) {
+    throw new ApiError(409, `Supplier invoice "${number}" from ${supplierName} already exists`);
+  }
+}
+
 // POST /api/purchase-invoices — create with nested line items.
 router.post(
   "/",
   requireRole("accountant"),
   asyncHandler(async (req, res) => {
     const body = validate(purchaseInvoiceSchema, req.body);
+    await assertSupplierInvoiceUnique(body.supplierName, body.supplierInvoiceNumber);
     const computed = computePurchaseTotals(body.lineItems, body);
     const created = await prisma.purchaseInvoice.create({
       data: {
@@ -175,6 +199,7 @@ router.put(
     const body = validate(purchaseInvoiceSchema, req.body);
     const existing = await prisma.purchaseInvoice.findUnique({ where: { id: req.params.id } });
     if (!existing) throw new ApiError(404, "Purchase invoice not found");
+    await assertSupplierInvoiceUnique(body.supplierName, body.supplierInvoiceNumber, existing.id);
 
     const computed = computePurchaseTotals(body.lineItems, body);
     const updated = await prisma.$transaction(async (tx) => {

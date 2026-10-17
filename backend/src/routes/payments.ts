@@ -4,7 +4,7 @@ import { prisma } from "../db";
 import { validate } from "../middleware/validate";
 import { ApiError, asyncHandler } from "../middleware/errorHandler";
 import { authenticate, requireRole } from "../middleware/auth";
-import { round2 } from "../utils/calculations";
+import { round2, computeInvoiceStatus } from "../utils/calculations";
 
 const router = Router();
 router.use(authenticate);
@@ -27,18 +27,18 @@ const paymentSchema = z.object({
 
 /**
  * Recompute a sales invoice's payment-driven status.
- * Draft and Overdue are left alone (manual states); otherwise the status
- * follows how much has been collected.
+ * Manual states (Draft, Cancelled) are never touched; Overdue clears to
+ * Paid once the invoice is fully collected. See computeInvoiceStatus.
  */
 async function refreshInvoiceStatus(invoiceId: string) {
   const invoice = await prisma.invoice.findUnique({
     where: { id: invoiceId },
     include: { payments: true },
   });
-  if (!invoice || invoice.status === "Draft" || invoice.status === "Overdue") return;
+  if (!invoice) return;
 
   const paid = round2(invoice.payments.reduce((s, p) => s + p.amount, 0));
-  const status = paid <= 0 ? "Issued" : paid >= invoice.totalAmount ? "Paid" : "Partially Paid";
+  const status = computeInvoiceStatus(invoice.totalAmount, paid, invoice.status);
   if (status !== invoice.status) {
     await prisma.invoice.update({ where: { id: invoice.id }, data: { status } });
   }
