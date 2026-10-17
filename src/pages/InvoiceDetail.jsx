@@ -3,7 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { db } from "@/api/entities";
 import { PageHeader, Table, Loading, Badge } from "@/components/ui/common";
 import { formatMoney, statusColor, invoiceOutstanding } from "@/lib/finance";
-import { ArrowLeft, Pencil, Wallet, Trash2 } from "lucide-react";
+import { ArrowLeft, Pencil, Wallet, Trash2, Ban } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { useI18n } from "@/lib/i18n";
@@ -45,10 +45,21 @@ export default function InvoiceDetail() {
 
   const paid = payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
   const outstanding = invoiceOutstanding(invoice, payments);
+  // Locked = the document is final: cancelled, or already has payments.
+  // Locked invoices can't be edited; cancelled ones can't take payments.
+  const isCancelled = invoice.status === "Cancelled";
+  const isLocked = isCancelled || payments.length > 0;
 
   const deletePayment = async (pid) => {
     await db.entities.Payment.delete(pid);
     toast({ title: t("toast.paymentDeleted") });
+    load();
+  };
+
+  const cancelInvoice = async () => {
+    if (!window.confirm(t("invoiceDetail.cancelConfirm"))) return;
+    await db.entities.Invoice.update(invoice.id, { status: "Cancelled" });
+    toast({ title: t("toast.invoiceCancelled") });
     load();
   };
 
@@ -63,12 +74,21 @@ export default function InvoiceDetail() {
         subtitle={`${customer?.name || "—"} · ${invoice.date} · ${invoice.currency}`}
         actions={
           <>
-            <Link to={`/invoices/${invoice.id}/edit`}>
-              <Button size="sm" variant="outline"><Pencil className="h-4 w-4 ms-1" /> {t("action.edit")}</Button>
-            </Link>
-            <Link to={`/payments/new?customer=${invoice.customer_id}&invoice=${invoice.id}`}>
-              <Button size="sm"><Wallet className="h-4 w-4 ms-1" /> {t("action.recordPayment")}</Button>
-            </Link>
+            {!isLocked && (
+              <Link to={`/invoices/${invoice.id}/edit`}>
+                <Button size="sm" variant="outline"><Pencil className="h-4 w-4 ms-1" /> {t("action.edit")}</Button>
+              </Link>
+            )}
+            {!isCancelled && (
+              <>
+                <Link to={`/payments/new?customer=${invoice.customer_id}&invoice=${invoice.id}`}>
+                  <Button size="sm"><Wallet className="h-4 w-4 ms-1" /> {t("action.recordPayment")}</Button>
+                </Link>
+                <Button size="sm" variant="outline" className="text-destructive border-destructive/40 hover:bg-destructive/10" onClick={cancelInvoice}>
+                  <Ban className="h-4 w-4 ms-1" /> {t("action.cancelInvoice")}
+                </Button>
+              </>
+            )}
           </>
         }
       />

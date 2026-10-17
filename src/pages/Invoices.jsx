@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/select";
 import { useI18n } from "@/lib/i18n";
 
-const STATUS_VALUES = ["Draft", "Issued", "Partially Paid", "Paid", "Overdue"];
+const STATUS_VALUES = ["Draft", "Issued", "Partially Paid", "Paid", "Overdue", "Cancelled"];
 
 export default function Invoices() {
   const { t } = useI18n();
