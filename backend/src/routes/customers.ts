@@ -4,7 +4,7 @@ import { prisma } from "../db";
 import { validate } from "../middleware/validate";
 import { ApiError, asyncHandler } from "../middleware/errorHandler";
 import { authenticate, requireRole } from "../middleware/auth";
-import { computeCustomerBalance } from "../utils/calculations";
+import { computeCustomerBalanceByCurrency } from "../utils/calculations";
 
 const router = Router();
 router.use(authenticate);
@@ -25,7 +25,8 @@ router.get(
   }),
 );
 
-// GET /api/customers/:id/balance — invoiced / paid / outstanding.
+// GET /api/customers/:id/balance — invoiced / paid / outstanding, per currency.
+// Currencies are never summed together (USD + LBP is not a real amount).
 router.get(
   "/:id/balance",
   asyncHandler(async (req, res) => {
@@ -34,7 +35,7 @@ router.get(
       include: { invoices: true, payments: true },
     });
     if (!customer) throw new ApiError(404, "Customer not found");
-    res.json(computeCustomerBalance(customer.invoices, customer.payments));
+    res.json({ byCurrency: computeCustomerBalanceByCurrency(customer.invoices, customer.payments) });
   }),
 );
 

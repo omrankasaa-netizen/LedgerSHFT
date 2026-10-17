@@ -98,23 +98,50 @@ export function computeInvoiceStatus(
 }
 
 // ---------------------------------------------------------------------------
-// Customer balance
+// Customer balance (per currency)
 // ---------------------------------------------------------------------------
 
-export interface CustomerBalance {
+export interface CurrencyBalance {
+  currency: string;
   totalInvoiced: number;
   totalPaid: number;
   outstanding: number;
 }
 
-/** Outstanding = total invoiced − total paid (never negative). */
-export function computeCustomerBalance(
-  invoices: Array<{ totalAmount: number }>,
-  payments: Array<{ amount: number }>,
-): CustomerBalance {
-  const totalInvoiced = round2(invoices.reduce((s, i) => s + i.totalAmount, 0));
-  const totalPaid = round2(payments.reduce((s, p) => s + p.amount, 0));
-  return { totalInvoiced, totalPaid, outstanding: Math.max(0, round2(totalInvoiced - totalPaid)) };
+/**
+ * Per-currency customer balance. Invoices group by invoice currency, payments
+ * by payment currency; Cancelled invoices and their linked payments are
+ * excluded. Cross-currency settlement is intentionally NOT netted — that
+ * needs exchange rates — so each currency clamps its own outstanding at zero.
+ * Never sum the rows into one number: USD + LBP is not a real amount.
+ */
+export function computeCustomerBalanceByCurrency(
+  invoices: Array<{ id: string; totalAmount: number; currency: string; status: string }>,
+  payments: Array<{ amount: number; currency: string; invoiceId?: string | null }>,
+): CurrencyBalance[] {
+  const cancelledIds = new Set(invoices.filter((i) => i.status === "Cancelled").map((i) => i.id));
+  const rows = new Map<string, CurrencyBalance>();
+  const row = (currency: string): CurrencyBalance => {
+    let r = rows.get(currency);
+    if (!r) {
+      r = { currency, totalInvoiced: 0, totalPaid: 0, outstanding: 0 };
+      rows.set(currency, r);
+    }
+    return r;
+  };
+  for (const inv of invoices) {
+    if (inv.status === "Cancelled") continue;
+    const r = row(inv.currency);
+    r.totalInvoiced = round2(r.totalInvoiced + inv.totalAmount);
+  }
+  for (const p of payments) {
+    if (p.invoiceId && cancelledIds.has(p.invoiceId)) continue;
+    const r = row(p.currency);
+    r.totalPaid = round2(r.totalPaid + p.amount);
+  }
+  return [...rows.values()]
+    .map((r) => ({ ...r, outstanding: Math.max(0, round2(r.totalInvoiced - r.totalPaid)) }))
+    .sort((a, b) => a.currency.localeCompare(b.currency));
 }
 
 // ---------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 import {
   allocateLandedCosts,
-  computeCustomerBalance,
+  computeCustomerBalanceByCurrency,
   computeInvoiceStatus,
   computeInvoiceTotals,
   computePartnerShare,
@@ -157,18 +157,62 @@ describe("computePartnerShare", () => {
   });
 });
 
-describe("computeCustomerBalance", () => {
-  it("sums invoiced and paid, never goes negative", () => {
-    const balance = computeCustomerBalance(
-      [{ totalAmount: 100 }, { totalAmount: 50 }],
-      [{ amount: 120 }],
+describe("computeCustomerBalanceByCurrency", () => {
+  it("sums invoiced and paid per currency, never goes negative", () => {
+    const rows = computeCustomerBalanceByCurrency(
+      [{ id: "i1", totalAmount: 100, currency: "USD", status: "Issued" }, { id: "i2", totalAmount: 50, currency: "USD", status: "Issued" }],
+      [{ amount: 120, currency: "USD", invoiceId: "i1" }],
     );
-    expect(balance).toEqual({ totalInvoiced: 150, totalPaid: 120, outstanding: 30 });
+    expect(rows).toEqual([{ currency: "USD", totalInvoiced: 150, totalPaid: 120, outstanding: 30 }]);
   });
 
   it("overpayment clamps outstanding to zero", () => {
-    const balance = computeCustomerBalance([{ totalAmount: 100 }], [{ amount: 150 }]);
-    expect(balance.outstanding).toBe(0);
+    const rows = computeCustomerBalanceByCurrency(
+      [{ id: "i1", totalAmount: 100, currency: "USD", status: "Issued" }],
+      [{ amount: 150, currency: "USD", invoiceId: "i1" }],
+    );
+    expect(rows[0].outstanding).toBe(0);
+  });
+
+  it("never sums different currencies together", () => {
+    const rows = computeCustomerBalanceByCurrency(
+      [
+        { id: "i1", totalAmount: 100, currency: "USD", status: "Issued" },
+        { id: "i2", totalAmount: 900000, currency: "LBP", status: "Issued" },
+      ],
+      [{ amount: 40, currency: "USD", invoiceId: "i1" }],
+    );
+    expect(rows).toEqual([
+      { currency: "LBP", totalInvoiced: 900000, totalPaid: 0, outstanding: 900000 },
+      { currency: "USD", totalInvoiced: 100, totalPaid: 40, outstanding: 60 },
+    ]);
+  });
+
+  it("does not net a foreign-currency payment against an invoice", () => {
+    // 100 USD invoice paid 150,000 LBP: USD is still fully outstanding and
+    // LBP shows money received — settlement needs an exchange rate.
+    const rows = computeCustomerBalanceByCurrency(
+      [{ id: "i1", totalAmount: 100, currency: "USD", status: "Issued" }],
+      [{ amount: 150000, currency: "LBP", invoiceId: "i1" }],
+    );
+    expect(rows).toEqual([
+      { currency: "LBP", totalInvoiced: 0, totalPaid: 150000, outstanding: 0 },
+      { currency: "USD", totalInvoiced: 100, totalPaid: 0, outstanding: 100 },
+    ]);
+  });
+
+  it("excludes cancelled invoices and their linked payments", () => {
+    const rows = computeCustomerBalanceByCurrency(
+      [
+        { id: "i1", totalAmount: 100, currency: "USD", status: "Cancelled" },
+        { id: "i2", totalAmount: 200, currency: "USD", status: "Issued" },
+      ],
+      [
+        { amount: 100, currency: "USD", invoiceId: "i1" }, // linked to cancelled
+        { amount: 50, currency: "USD", invoiceId: "i2" },
+      ],
+    );
+    expect(rows).toEqual([{ currency: "USD", totalInvoiced: 200, totalPaid: 50, outstanding: 150 }]);
   });
 });
 
