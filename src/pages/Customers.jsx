@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { db } from "@/api/entities";
 import { PageHeader, Table, Loading, EmptyState, Badge } from "@/components/ui/common";
-import { formatMoney, customerOutstanding, customerStatus } from "@/lib/finance";
+import { formatMoney, customerBalancesByCurrency, outstandingSortKey, customerStatus } from "@/lib/finance";
 import { Plus, Search, Users, FileText, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,11 +51,11 @@ export default function Customers() {
     .map((c) => {
       const cInvoices = invoices.filter((i) => i.customer_id === c.id);
       const cPayments = payments.filter((p) => p.customer_id === c.id);
-      const outstanding = customerOutstanding(cInvoices, cPayments);
+      const balances = customerBalancesByCurrency(cInvoices, cPayments);
       const lastInvoice = cInvoices.sort((a, b) => String(b.date).localeCompare(String(a.date)))[0];
-      return { ...c, outstanding, lastInvoiceDate: lastInvoice?.date };
+      return { ...c, balances, lastInvoiceDate: lastInvoice?.date };
     })
-    .sort((a, b) => b.outstanding - a.outstanding);
+    .sort((a, b) => outstandingSortKey(b.balances) - outstandingSortKey(a.balances));
 
   if (loading) return <div className="p-6"><Loading /></div>;
 
@@ -115,8 +115,12 @@ export default function Customers() {
                 <td className="px-4 py-2.5 text-muted-foreground">{c.city || "—"}</td>
                 <td className="px-4 py-2.5 text-muted-foreground">{c.phone || "—"}</td>
                 <td className="px-4 py-2.5"><Badge className={st.color}>{t(`customerStatus.${st.key}`)}</Badge></td>
-                <td className={`px-4 py-2.5 font-semibold ${c.outstanding > 0 ? "text-amber-600" : "text-emerald-600"}`}>
-                  {formatMoney(c.outstanding)}
+                <td className={`px-4 py-2.5 font-semibold ${outstandingSortKey(c.balances) > 0 ? "text-amber-600" : "text-emerald-600"}`}>
+                  {c.balances.filter((b) => b.outstanding > 0).length === 0
+                    ? formatMoney(0)
+                    : c.balances.filter((b) => b.outstanding > 0).map((b) => (
+                        <div key={b.currency}>{formatMoney(b.outstanding, b.currency)}</div>
+                      ))}
                 </td>
                 <td className="px-4 py-2.5 text-muted-foreground">{c.lastInvoiceDate || "—"}</td>
                 <td className="px-4 py-2.5">

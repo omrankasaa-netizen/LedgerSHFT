@@ -2,13 +2,17 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { db } from "@/api/entities";
 import { PageHeader, StatCard, Loading, Badge } from "@/components/ui/common";
-import { formatMoney, customerOutstanding, isThisMonth, monthLabel } from "@/lib/finance";
+import { formatMoney, customerBalancesByCurrency, outstandingSortKey, isThisMonth, monthLabel } from "@/lib/finance";
 import { Plus, Wallet, FileText, Users, ArrowRight, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
 import { useI18n } from "@/lib/i18n";
+
+// Bar colors per currency index — sales and profit get distinct families.
+const SALES_COLORS = ["#3b82f6", "#f59e0b", "#8b5cf6", "#ec4899"];
+const PROFIT_COLORS = ["#10b981", "#84cc16", "#14b8a6", "#22d3ee"];
 
 export default function Dashboard() {
   const { t, isRTL } = useI18n();
@@ -36,15 +40,20 @@ export default function Dashboard() {
 
   if (loading) return <div className="p-6"><Loading /></div>;
 
+  // Cancelled invoices are void — excluded from every money figure below.
+  const activeInvoices = invoices.filter((i) => i.status !== "Cancelled");
+  const cancelledIds = new Set(invoices.filter((i) => i.status === "Cancelled").map((i) => i.id));
+  const activePayments = payments.filter((p) => !p.invoice_id || !cancelledIds.has(p.invoice_id));
+
   const outstandingByCustomer = customers.map((c) => {
     const cInvoices = invoices.filter((i) => i.customer_id === c.id);
     const cPayments = payments.filter((p) => p.customer_id === c.id);
-    return { customer: c, outstanding: customerOutstanding(cInvoices, cPayments) };
+    return { customer: c, balances: customerBalancesByCurrency(cInvoices, cPayments) };
   });
-  const totalOutstanding = outstandingByCustomer.reduce((s, x) => s + x.outstanding, 0);
+  // Sort/filter heuristic only — mixed-currency sums are never displayed.
   const top5 = [...outstandingByCustomer]
-    .filter((x) => x.outstanding > 0)
-    .sort((a, b) => b.outstanding - a.outstanding)
+    .filter((x) => outstandingSortKey(x.balances) > 0)
+    .sort((a, b) => outstandingSortKey(b.balances) - outstandingSortKey(a.balances))
     .slice(0, 5);
 
   const priorities = [...outstandingByCustomer]
@@ -52,17 +61,25 @@ export default function Dashboard() {
       ...x,
       hasOverdue: invoices.some((i) => i.customer_id === x.customer.id && i.status === "Overdue"),
     }))
-    .filter((x) => x.outstanding > 0)
-    .sort((a, b) => b.outstanding - a.outstanding)
+    .filter((x) => outstandingSortKey(x.balances) > 0)
+    .sort((a, b) => outstandingSortKey(b.balances) - outstandingSortKey(a.balances))
     .slice(0, 6);
 
-  const collectedThisMonth = payments
-    .filter((p) => isThisMonth(p.date))
-    .reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  // Headline figures stay per currency — USD and LBP are never summed.
+  const totalOutstandingRows = customerBalancesByCurrency(activeInvoices, activePayments)
+    .filter((b) => b.outstanding > 0);
 
-  const profitThisMonth = invoices
-    .filter((i) => isThisMonth(i.date))
-    .reduce((s, i) => s + (Number(i.gross_profit_amount) || 0), 0);
+  const collectedByCurrency = {};
+  activePayments.filter((p) => isThisMonth(p.date)).forEach((p) => {
+    const cur = p.currency || "USD";
+    collectedByCurrency[cur] = (collectedByCurrency[cur] || 0) + (Number(p.amount) || 0);
+  });
+
+  const profitByCurrency = {};
+  activeInvoices.filter((i) => isThisMonth(i.date)).forEach((i) => {
+    const cur = i.currency || "USD";
+    profitByCurrency[cur] = (profitByCurrency[cur] || 0) + (Number(i.gross_profit_amount) || 0);
+  });
 
   const now = new Date();
   const months = [];
@@ -70,16 +87,20 @@ export default function Dashboard() {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
   }
+  // One sales/profit bar pair per currency so the chart never mixes currencies.
+  const chartCurrencies = [...new Set(activeInvoices.map((i) => i.currency || "USD"))].sort();
   const chartData = months.map((key) => {
-    const monthInvoices = invoices.filter((i) => String(i.date).slice(0, 7) === key);
-    return {
-      month: monthLabel(key),
-      sales: monthInvoices.reduce((s, i) => s + (Number(i.total_amount) || 0), 0),
-      profit: monthInvoices.reduce((s, i) => s + (Number(i.gross_profit_amount) || 0), 0),
-    };
+    const monthInvoices = activeInvoices.filter((i) => String(i.date).slice(0, 7) === key);
+    const row = { month: monthLabel(key) };
+    chartCurrencies.forEach((cur) => {
+      const curInvoices = monthInvoices.filter((i) => (i.currency || "USD") === cur);
+      row[`sales ${cur}`] = curInvoices.reduce((s, i) => s + (Number(i.total_amount) || 0), 0);
+      row[`profit ${cur}`] = curInvoices.reduce((s, i) => s + (Number(i.gross_profit_amount) || 0), 0);
+    });
+    return row;
   });
 
-  const overdueCount = invoices.filter((i) => i.status === "Overdue").length;
+  const overdueCount = activeInvoices.filter((i) => i.status === "Overdue").length;
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -99,10 +120,22 @@ export default function Dashboard() {
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard label={t("dashboard.totalOutstanding")} value={formatMoney(totalOutstanding)} accent="amber" sub={`${customers.length} ${t("dashboard.customers")}`} />
-        <StatCard label={t("dashboard.collectedMonth")} value={formatMoney(collectedThisMonth)} accent="emerald" />
-        <StatCard label={t("dashboard.profitMonth")} value={formatMoney(profitThisMonth)} accent="blue" />
-        <StatCard label={t("dashboard.totalInvoices")} value={invoices.length} sub={`${overdueCount} ${t("dashboard.overdue")}`} accent="red" />
+        <StatCard
+          label={t("dashboard.totalOutstanding")}
+          value={totalOutstandingRows.length ? totalOutstandingRows.map((b) => formatMoney(b.outstanding, b.currency)).join(" · ") : formatMoney(0)}
+          accent="amber" sub={`${customers.length} ${t("dashboard.customers")}`}
+        />
+        <StatCard
+          label={t("dashboard.collectedMonth")}
+          value={Object.keys(collectedByCurrency).length ? Object.keys(collectedByCurrency).sort().map((cur) => formatMoney(collectedByCurrency[cur], cur)).join(" · ") : formatMoney(0)}
+          accent="emerald"
+        />
+        <StatCard
+          label={t("dashboard.profitMonth")}
+          value={Object.keys(profitByCurrency).length ? Object.keys(profitByCurrency).sort().map((cur) => formatMoney(profitByCurrency[cur], cur)).join(" · ") : formatMoney(0)}
+          accent="blue"
+        />
+        <StatCard label={t("dashboard.totalInvoices")} value={activeInvoices.length} sub={`${overdueCount} ${t("dashboard.overdue")}`} accent="red" />
       </div>
 
       {/* Today's priorities */}
@@ -112,7 +145,7 @@ export default function Dashboard() {
           <p className="text-sm text-muted-foreground">{t("dashboard.noPriorities")}</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {priorities.map(({ customer, outstanding, hasOverdue }) => (
+            {priorities.map(({ customer, balances, hasOverdue }) => (
               <Link
                 key={customer.id}
                 to={`/customers/${customer.id}`}
@@ -126,7 +159,11 @@ export default function Dashboard() {
                   </Badge>
                 </div>
                 <div className="text-end ms-3">
-                  <div className="font-heading text-lg font-bold text-amber-600">{formatMoney(outstanding)}</div>
+                  <div className="font-heading text-lg font-bold text-amber-600">
+                    {balances.filter((b) => b.outstanding > 0).map((b) => (
+                      <div key={b.currency}>{formatMoney(b.outstanding, b.currency)}</div>
+                    ))}
+                  </div>
                   <div className="text-[11px] text-muted-foreground">{t("customers.col.outstanding")}</div>
                 </div>
               </Link>
@@ -147,7 +184,7 @@ export default function Dashboard() {
             <p className="text-sm text-muted-foreground py-6 text-center">{t("dashboard.noOutstanding")}</p>
           ) : (
             <div className="space-y-2">
-              {top5.map(({ customer, outstanding }) => (
+              {top5.map(({ customer, balances }) => (
                 <Link
                   key={customer.id}
                   to={`/customers/${customer.id}`}
@@ -157,7 +194,11 @@ export default function Dashboard() {
                     <div className="font-medium text-foreground truncate">{customer.name}</div>
                     <div className="text-xs text-muted-foreground">{customer.city || "—"} · {t(`type.${customer.type}`)}</div>
                   </div>
-                  <div className="font-semibold text-amber-600 ms-3">{formatMoney(outstanding)}</div>
+                  <div className="font-semibold text-amber-600 ms-3 text-end">
+                    {balances.filter((b) => b.outstanding > 0).map((b) => (
+                      <div key={b.currency}>{formatMoney(b.outstanding, b.currency)}</div>
+                    ))}
+                  </div>
                 </Link>
               ))}
             </div>
@@ -175,8 +216,12 @@ export default function Dashboard() {
               <XAxis dataKey="month" tick={{ fontSize: 11 }} reversed={isRTL} />
               <YAxis tick={{ fontSize: 11 }} orientation={isRTL ? "right" : "left"} />
               <Tooltip />
-              <Bar dataKey="sales" fill="#3b82f6" radius={[3, 3, 0, 0]} />
-              <Bar dataKey="profit" fill="#10b981" radius={[3, 3, 0, 0]} />
+              {chartCurrencies.map((cur, idx) => (
+                <Bar key={`sales-${cur}`} dataKey={`sales ${cur}`} fill={SALES_COLORS[idx % SALES_COLORS.length]} radius={[3, 3, 0, 0]} />
+              ))}
+              {chartCurrencies.map((cur, idx) => (
+                <Bar key={`profit-${cur}`} dataKey={`profit ${cur}`} fill={PROFIT_COLORS[idx % PROFIT_COLORS.length]} radius={[3, 3, 0, 0]} />
+              ))}
             </BarChart>
           </ResponsiveContainer>
         </div>

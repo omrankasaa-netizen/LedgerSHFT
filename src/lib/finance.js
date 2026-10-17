@@ -45,26 +45,49 @@ export function invoiceOutstanding(invoice, payments = []) {
   return Math.max(0, (Number(invoice.total_amount) || 0) - paid);
 }
 
-// Customer outstanding across all invoices/payments.
-// Cancelled invoices and the payments linked to them are excluded — the
-// document is void, so neither its total nor its payments move the balance.
-export function customerOutstanding(invoices = [], payments = []) {
+// Per-currency customer balances. Invoices group by invoice currency,
+// payments by payment currency; cancelled invoices and their linked payments
+// are excluded. Cross-currency settlement is NOT netted (needs exchange
+// rates) — each currency clamps its own outstanding at zero.
+// Never sum rows across currencies: USD + LBP is not a real amount.
+export function customerBalancesByCurrency(invoices = [], payments = []) {
   const cancelledIds = new Set(invoices.filter((i) => i.status === "Cancelled").map((i) => i.id));
-  const totalInvoiced = invoices
-    .filter((i) => i.status !== "Cancelled")
-    .reduce((s, inv) => s + (Number(inv.total_amount) || 0), 0);
-  const totalPaid = payments
-    .filter((p) => !p.invoice_id || !cancelledIds.has(p.invoice_id))
-    .reduce((s, p) => s + (Number(p.amount) || 0), 0);
-  return Math.max(0, totalInvoiced - totalPaid);
+  const rows = new Map();
+  const row = (currency) => {
+    if (!rows.has(currency)) rows.set(currency, { currency, totalInvoiced: 0, totalPaid: 0, outstanding: 0 });
+    return rows.get(currency);
+  };
+  for (const inv of invoices) {
+    if (inv.status === "Cancelled") continue;
+    const r = row(inv.currency || "USD");
+    r.totalInvoiced += Number(inv.total_amount) || 0;
+  }
+  for (const p of payments) {
+    if (p.invoice_id && cancelledIds.has(p.invoice_id)) continue;
+    const r = row(p.currency || "USD");
+    r.totalPaid += Number(p.amount) || 0;
+  }
+  return [...rows.values()]
+    .map((r) => ({
+      ...r,
+      totalInvoiced: Math.round(r.totalInvoiced * 100) / 100,
+      totalPaid: Math.round(r.totalPaid * 100) / 100,
+      outstanding: Math.max(0, Math.round((r.totalInvoiced - r.totalPaid) * 100) / 100),
+    }))
+    .sort((a, b) => a.currency.localeCompare(b.currency));
+}
+
+// Sum of per-currency outstanding — ORDERING ONLY, never display this number.
+export function outstandingSortKey(balances = []) {
+  return balances.reduce((s, b) => s + b.outstanding, 0);
 }
 
 // Customer status: Overdue (red) > Outstanding (amber) > Paid (green)
 export function customerStatus(invoices = [], payments = []) {
   const hasOverdue = invoices.some((i) => i.status === "Overdue");
-  const outstanding = customerOutstanding(invoices, payments);
+  const hasOutstanding = customerBalancesByCurrency(invoices, payments).some((b) => b.outstanding > 0);
   if (hasOverdue) return { key: "overdue", color: "bg-red-100 text-red-700 border-red-200" };
-  if (outstanding > 0) return { key: "outstanding", color: "bg-amber-100 text-amber-700 border-amber-200" };
+  if (hasOutstanding) return { key: "outstanding", color: "bg-amber-100 text-amber-700 border-amber-200" };
   return { key: "paid", color: "bg-emerald-100 text-emerald-700 border-emerald-200" };
 }
 
