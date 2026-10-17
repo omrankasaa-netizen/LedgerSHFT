@@ -1,11 +1,40 @@
 import {
   allocateLandedCosts,
   computeCustomerBalance,
+  computeInvoiceStatus,
   computeInvoiceTotals,
   computePartnerShare,
   computePartnerShareSummary,
   round2,
 } from "../src/utils/calculations";
+
+describe("computeInvoiceStatus", () => {
+  it("never touches manual states", () => {
+    expect(computeInvoiceStatus(100, 0, "Draft")).toBe("Draft");
+    expect(computeInvoiceStatus(100, 100, "Draft")).toBe("Draft");
+    expect(computeInvoiceStatus(100, 100, "Cancelled")).toBe("Cancelled");
+  });
+
+  it("clears Overdue to Paid once fully collected", () => {
+    expect(computeInvoiceStatus(100, 100, "Overdue")).toBe("Paid");
+    expect(computeInvoiceStatus(100, 150, "Overdue")).toBe("Paid");
+  });
+
+  it("keeps Overdue while anything is still outstanding", () => {
+    expect(computeInvoiceStatus(100, 0, "Overdue")).toBe("Overdue");
+    expect(computeInvoiceStatus(100, 50, "Overdue")).toBe("Overdue");
+  });
+
+  it("follows collection for normal states", () => {
+    expect(computeInvoiceStatus(100, 0, "Issued")).toBe("Issued");
+    expect(computeInvoiceStatus(100, 40, "Issued")).toBe("Partially Paid");
+    expect(computeInvoiceStatus(100, 100, "Partially Paid")).toBe("Paid");
+  });
+
+  it("treats a zero-total invoice as not payable", () => {
+    expect(computeInvoiceStatus(0, 0, "Issued")).toBe("Issued");
+  });
+});
 
 describe("allocateLandedCosts", () => {
   const extras = { freightAmount: 100, dutyAmount: 50, customsFeesAmount: 30, otherFeesAmount: 20 };

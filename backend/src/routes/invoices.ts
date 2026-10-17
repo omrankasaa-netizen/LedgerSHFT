@@ -124,6 +124,25 @@ router.get(
   }),
 );
 
+/**
+ * Guard against duplicate imports: an invoice number must be unique per
+ * customer. Blank numbers are allowed (many traders don't number invoices).
+ */
+async function assertInvoiceNumberUnique(
+  customerId: string,
+  invoiceNumber: string | null | undefined,
+  excludeId?: string,
+): Promise<void> {
+  const number = invoiceNumber?.trim();
+  if (!number) return;
+  const existing = await prisma.invoice.findFirst({
+    where: { customerId, invoiceNumber: number, ...(excludeId ? { NOT: { id: excludeId } } : {}) },
+  });
+  if (existing) {
+    throw new ApiError(409, `Invoice number "${number}" already exists for this customer`);
+  }
+}
+
 // POST /api/invoices — totals are always recomputed server-side.
 router.post(
   "/",
@@ -132,6 +151,7 @@ router.post(
     const body = validate(invoiceSchema, req.body);
     const customer = await prisma.customer.findUnique({ where: { id: body.customerId } });
     if (!customer) throw new ApiError(400, "Customer not found");
+    await assertInvoiceNumberUnique(body.customerId, body.invoiceNumber);
 
     const lines = await resolveLines(body.lineItems);
     const partner = await loadPartnerRule(body.partnerId);
@@ -165,6 +185,7 @@ router.put(
     const body = validate(invoiceSchema, req.body);
     const existing = await prisma.invoice.findUnique({ where: { id: req.params.id } });
     if (!existing) throw new ApiError(404, "Invoice not found");
+    await assertInvoiceNumberUnique(body.customerId, body.invoiceNumber, existing.id);
 
     const lines = await resolveLines(body.lineItems);
     const partner = await loadPartnerRule(body.partnerId);
