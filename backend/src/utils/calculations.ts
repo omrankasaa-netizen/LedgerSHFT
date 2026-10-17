@@ -77,6 +77,27 @@ export function computeInvoiceTotals(
 }
 
 // ---------------------------------------------------------------------------
+// Invoice status derivation
+// ---------------------------------------------------------------------------
+
+/**
+ * Derive invoice status from its payments.
+ * Manual states (Draft, Cancelled) are never auto-changed; Overdue is kept
+ * until the invoice is fully paid, then it clears to "Paid".
+ */
+export function computeInvoiceStatus(
+  totalAmount: number,
+  paidAmount: number,
+  currentStatus: string,
+): string {
+  if (currentStatus === "Draft" || currentStatus === "Cancelled") return currentStatus;
+  const paid = round2(paidAmount);
+  if (totalAmount > 0 && paid >= totalAmount) return "Paid";
+  if (currentStatus === "Overdue") return "Overdue";
+  return paid <= 0 ? "Issued" : "Partially Paid";
+}
+
+// ---------------------------------------------------------------------------
 // Customer balance
 // ---------------------------------------------------------------------------
 

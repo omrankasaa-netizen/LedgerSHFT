@@ -23,6 +23,33 @@ function toAuthUser(user: { id: string; email: string; name: string; role: strin
 }
 
 /**
+ * In-memory login throttle: max 10 failed attempts per IP per 10 minutes.
+ * Sufficient for a single-instance deploy; swap for a store-backed limiter
+ * if the app ever runs multiple replicas.
+ */
+const LOGIN_WINDOW_MS = 10 * 60 * 1000;
+const LOGIN_MAX_ATTEMPTS = 10;
+const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+
+/** Throws 429 when the IP has exhausted its attempts inside the window. */
+function assertLoginAllowed(ip: string): void {
+  const entry = loginAttempts.get(ip);
+  if (entry && entry.resetAt > Date.now() && entry.count >= LOGIN_MAX_ATTEMPTS) {
+    throw new ApiError(429, "Too many login attempts — try again in a few minutes.");
+  }
+}
+
+function recordFailedLogin(ip: string): void {
+  const now = Date.now();
+  const entry = loginAttempts.get(ip);
+  if (!entry || entry.resetAt <= now) {
+    loginAttempts.set(ip, { count: 1, resetAt: now + LOGIN_WINDOW_MS });
+  } else {
+    entry.count += 1;
+  }
+}
+
+/**
  * POST /api/auth/register
  * Creates a user. Open (and forced to admin) only while no users exist —
  * after that only admins can create accounts.
@@ -63,11 +90,15 @@ router.post(
 router.post(
   "/login",
   asyncHandler(async (req, res) => {
+    const ip = req.ip ?? "unknown";
+    assertLoginAllowed(ip);
     const body = validate(credentialsSchema, req.body);
     const user = await prisma.user.findUnique({ where: { email: body.email } });
     if (!user || !(await bcrypt.compare(body.password, user.passwordHash))) {
+      recordFailedLogin(ip);
       throw new ApiError(401, "Invalid email or password");
     }
+    loginAttempts.delete(ip);
     const authUser = toAuthUser(user);
     res.json({ token: signToken(authUser), user: authUser });
   }),
